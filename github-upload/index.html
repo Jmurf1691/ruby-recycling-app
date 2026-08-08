@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ruby Recycling — Parts Inventory &amp; Sales</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --navy:#1f3864; --navy-dark:#152845; --gold:#b7791f; --light:#f2f2f2;
+    --border:#d9dbe0; --text:#222; --gray:#595959; --green:#1e7e34; --red:#b02a2a;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--text);background:#fafafa;}
+  header{background:var(--navy);color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  header h1{margin:0;font-size:20px;}
+  header .tag{color:#cbd5e8;font-size:12px;font-style:italic;}
+  nav{display:flex;background:var(--navy-dark);flex-wrap:wrap;}
+  nav button{background:none;border:none;color:#dbe3f0;padding:12px 18px;cursor:pointer;font-size:14px;border-bottom:3px solid transparent;}
+  nav button:hover{background:#22406f;}
+  nav button.active{color:#fff;border-bottom:3px solid var(--gold);font-weight:bold;background:#22406f;}
+  main{padding:20px 24px 60px;max-width:1400px;margin:0 auto;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  h2{color:var(--navy);border-bottom:2px solid var(--navy);padding-bottom:6px;margin-top:0;}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+  .toolbar input, .toolbar select{padding:7px 9px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+  .btn{background:var(--navy);color:#fff;border:none;padding:8px 14px;border-radius:4px;cursor:pointer;font-size:13px;}
+  .btn:hover{background:var(--navy-dark);}
+  .btn:disabled{opacity:.6;cursor:default;}
+  .btn.gold{background:var(--gold);}
+  .btn.gold:hover{background:#96610f;}
+  .btn.outline{background:#fff;color:var(--navy);border:1px solid var(--navy);}
+  .btn.small{padding:4px 9px;font-size:12px;}
+  .btn.danger{background:#fff;color:var(--red);border:1px solid var(--red);}
+  table{border-collapse:collapse;width:100%;background:#fff;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+  th,td{border:1px solid var(--border);padding:6px 8px;text-align:left;white-space:nowrap;}
+  th{background:var(--navy);color:#fff;position:sticky;top:0;}
+  tbody tr:nth-child(even){background:var(--light);}
+  tbody tr:hover{background:#eaf0fa;}
+  .table-wrap{overflow-x:auto;max-height:60vh;overflow-y:auto;border:1px solid var(--border);}
+  .badge{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#fff;}
+  .st-available,.st-onlot{background:var(--green);}
+  .st-sold,.st-partedout{background:var(--gray);}
+  .st-onhold,.st-assessed,.st-inteardown{background:var(--gold);}
+  .st-scrapped,.st-crushed{background:var(--red);}
+  .grade-A{color:var(--green);font-weight:bold;}
+  .grade-B{color:var(--gold);font-weight:bold;}
+  .grade-C{color:var(--red);font-weight:bold;}
+  .kpis{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px;}
+  .kpi{background:#fff;border:1px solid var(--border);border-left:5px solid var(--gold);border-radius:4px;padding:14px 18px;min-width:170px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+  .kpi .num{font-size:26px;font-weight:bold;color:var(--navy);}
+  .kpi .lbl{font-size:12px;color:var(--gray);}
+  .dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+  @media(max-width:900px){.dash-grid{grid-template-columns:1fr;}}
+  .card{background:#fff;border:1px solid var(--border);border-radius:4px;padding:16px;}
+  .card h3{margin-top:0;color:var(--navy);font-size:15px;}
+  .bar-row{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px;}
+  .bar-track{flex:1;background:#eee;height:14px;border-radius:3px;overflow:hidden;}
+  .bar-fill{background:var(--navy);height:100%;}
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);align-items:center;justify-content:center;z-index:50;}
+  .modal-bg.open{display:flex;}
+  .modal{background:#fff;border-radius:6px;padding:20px 24px;width:640px;max-width:92vw;max-height:88vh;overflow-y:auto;}
+  .modal h3{margin-top:0;color:var(--navy);}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;}
+  .form-grid.full{grid-template-columns:1fr;}
+  .field{display:flex;flex-direction:column;gap:3px;}
+  .field.span2{grid-column:1/3;}
+  .field label{font-size:11px;color:var(--gray);font-weight:bold;text-transform:uppercase;}
+  .field input,.field select,.field textarea{padding:7px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;font-family:inherit;}
+  .field textarea{resize:vertical;min-height:50px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  .empty{padding:30px;text-align:center;color:var(--gray);font-style:italic;}
+  .refnote{background:#fff8e6;border:1px solid #f0dca0;padding:10px 14px;border-radius:4px;font-size:12.5px;color:#6b5100;margin-bottom:16px;}
+  .foot-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .subtitle{color:var(--gray);font-size:13px;margin:-8px 0 16px;}
+  .scan-box{background:#000;border-radius:6px;overflow:hidden;position:relative;max-width:480px;margin:10px 0;}
+  .scan-box video{width:100%;display:block;}
+  .scan-frame{position:absolute;inset:15% 10%;border:3px solid var(--gold);border-radius:6px;pointer-events:none;}
+  .vin-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .vin-row input{flex:1;min-width:220px;font-size:16px;letter-spacing:1px;text-transform:uppercase;padding:10px;border:1px solid var(--border);border-radius:4px;}
+  .decode-result{background:#eef4ff;border:1px solid #c7d9f5;border-radius:4px;padding:10px 14px;margin:10px 0;font-size:13px;}
+  .decode-result.err{background:#fdecec;border-color:#f0b8b8;color:#7a1f1f;}
+  .section-card{background:#fff;border:1px solid var(--border);border-radius:6px;padding:16px 18px;margin-bottom:16px;}
+  .section-card h3{margin-top:0;color:var(--navy);font-size:15px;border-bottom:1px solid var(--border);padding-bottom:8px;}
+  .chk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 16px;}
+  .chk-item{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .chk-item input[type=checkbox]{width:18px;height:18px;}
+  .cond-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px 16px;}
+  .cond-item{display:flex;flex-direction:column;gap:4px;}
+  .cond-item label{font-size:11px;color:var(--gray);font-weight:bold;text-transform:uppercase;}
+  .cond-item select{padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;}
+  .warn-banner{background:#fff3cd;border:1px solid #ffe08a;color:#6b5100;padding:8px 12px;border-radius:4px;font-size:12.5px;margin-bottom:12px;}
+  .checklist-view dl{display:grid;grid-template-columns:180px 1fr;gap:4px 10px;font-size:13px;margin:0;}
+  .checklist-view dt{color:var(--gray);font-weight:bold;}
+  .checklist-view h4{color:var(--navy);margin:14px 0 6px;}
+  .login-overlay{position:fixed;inset:0;background:var(--navy);display:flex;align-items:center;justify-content:center;z-index:100;}
+  .login-box{background:#fff;border-radius:8px;padding:32px;width:360px;max-width:90vw;}
+  .login-box h2{margin-top:0;color:var(--navy);border:none;padding:0;}
+  .login-box input{width:100%;padding:10px;margin-bottom:10px;border:1px solid var(--border);border-radius:4px;font-size:14px;}
+  .login-err{color:var(--red);font-size:12.5px;margin-bottom:8px;min-height:16px;}
+  .photo-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
+  .photo-thumb{position:relative;width:90px;height:90px;border-radius:4px;overflow:hidden;border:1px solid var(--border);}
+  .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-thumb button{position:absolute;top:2px;right:2px;background:rgba(176,42,42,.85);color:#fff;border:none;border-radius:3px;font-size:10px;padding:2px 5px;cursor:pointer;}
+  .user-chip{color:#cbd5e8;font-size:12px;padding:0 6px;}
+</style>
+</head>
+<body>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>Ruby Recycling Staff Login</h2>
+    <div class="login-err" id="loginErr"></div>
+    <input type="email" id="loginEmail" placeholder="Email" autocomplete="username">
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+    <button class="btn gold" id="loginBtn" style="width:100%;" type="button">Log In</button>
+    <div class="subtitle" style="margin-top:10px;">Staff accounts are created by an admin in the Supabase dashboard (Authentication → Add User).</div>
+  </div>
+</div>
+
+<div id="appShell" style="display:none;">
+
+<header>
+  <div>
+    <h1>Ruby Recycling — Parts Inventory &amp; Sales</h1>
+    <div class="tag">Vehicle intake → grading → cataloging → sale, in one place</div>
+  </div>
+  <div class="foot-actions">
+    <span class="user-chip" id="userChip"></span>
+    <button class="btn gold" id="exportAllBtn">Export CSV</button>
+    <button class="btn outline" id="exportMarketBtn" style="background:#fff;">Export for Marketplaces</button>
+    <button class="btn outline" id="importBtn" style="background:#fff;">Import CSV</button>
+    <input type="file" id="importFile" accept=".csv" style="display:none;">
+    <button class="btn outline" id="logoutBtn" style="background:#fff;">Log Out</button>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-tab="dashboard" class="active">Dashboard</button>
+  <button data-tab="intake">New Intake</button>
+  <button data-tab="vehicles">Vehicle Intake</button>
+  <button data-tab="parts">Parts Inventory</button>
+  <button data-tab="sales">Sales</button>
+  <button data-tab="customers">Customers</button>
+  <button data-tab="reference">Grading Reference</button>
+</nav>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <section class="panel active" id="panel-dashboard">
+    <h2>Dashboard</h2>
+    <div class="kpis" id="kpiRow"></div>
+    <div class="dash-grid">
+      <div class="card">
+        <h3>Inventory value by category (available parts)</h3>
+        <div id="catBars"></div>
+      </div>
+      <div class="card">
+        <h3>Aging inventory (available &gt; 60 days)</h3>
+        <div id="agingList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- NEW INTAKE (tech/dismantler workflow) -->
+  <section class="panel" id="panel-intake">
+    <h2>New Vehicle Intake</h2>
+    <div class="subtitle">For techs &amp; dismantlers — scan or enter the VIN, confirm vehicle details, then complete the checklist before teardown begins.</div>
+
+    <div class="section-card">
+      <h3>1. Vehicle Identification</h3>
+      <div class="vin-row">
+        <input type="text" id="intakeVin" maxlength="17" placeholder="Scan or type 17-character VIN">
+        <button class="btn gold" id="scanVinBtn" type="button">📷 Scan VIN</button>
+        <button class="btn" id="decodeVinBtn" type="button">Decode VIN</button>
+      </div>
+      <div id="scanArea"></div>
+      <div id="decodeResult"></div>
+      <div class="subtitle" style="margin:6px 0 0;">Vehicle specs are pulled from NHTSA's free public VIN decoder (vPIC) — not a KBB valuation. Camera scanning needs Chrome/Edge and HTTPS; manual VIN entry always works as a fallback.</div>
+    </div>
+
+    <div class="section-card">
+      <h3>2. Vehicle Details</h3>
+      <div class="form-grid" id="intakeDetailsForm"></div>
+    </div>
+
+    <div class="section-card">
+      <h3>3. Safety &amp; Fluids (Hazmat)</h3>
+      <div class="chk-grid" id="chkSafety"></div>
+      <div class="cond-grid" style="margin-top:12px;">
+        <div class="cond-item"><label>Airbags</label><select id="airbagStatus"><option value=""></option><option>Not Deployed</option><option>Deployed</option><option>Unknown</option></select></div>
+        <div class="cond-item"><label>Catalytic Converter Present</label><select id="catPresent"><option value=""></option><option>Yes</option><option>No</option><option>Unknown</option></select></div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <h3>4. Drivability</h3>
+      <div class="cond-grid">
+        <div class="cond-item"><label>Starts &amp; Runs</label><select id="drStarts"><option value=""></option><option>Yes</option><option>No</option><option>Not Tested</option></select></div>
+        <div class="cond-item"><label>Transmission Engages</label><select id="drTrans"><option value=""></option><option>Yes</option><option>No</option><option>Not Tested</option></select></div>
+      </div>
+      <div class="field" style="margin-top:10px;"><label>Drivability Notes</label><textarea id="drNotes"></textarea></div>
+    </div>
+
+    <div class="section-card">
+      <h3>5. Exterior &amp; Body Condition</h3>
+      <div class="cond-grid" id="extGrid"></div>
+      <div class="field" style="margin-top:10px;"><label>Exterior Notes</label><textarea id="extNotes"></textarea></div>
+    </div>
+
+    <div class="section-card">
+      <h3>6. Interior Condition</h3>
+      <div class="cond-grid" id="intGrid"></div>
+      <div class="field" style="margin-top:10px;"><label>Interior Notes</label><textarea id="intNotes"></textarea></div>
+    </div>
+
+    <div class="section-card">
+      <h3>7. Tires &amp; Wheels</h3>
+      <div class="cond-grid">
+        <div class="cond-item"><label>Tread Adequate</label><select id="tireTread"><option value=""></option><option>Yes</option><option>No</option><option>Mixed</option></select></div>
+        <div class="cond-item"><label>Spare Present</label><select id="tireSpare"><option value=""></option><option>Yes</option><option>No</option><option>N/A</option></select></div>
+        <div class="cond-item"><label>Wheel Condition</label><select id="wheelCond"><option value=""></option><option>Good</option><option>Damaged</option><option>Missing</option></select></div>
+      </div>
+      <div class="field" style="margin-top:10px;"><label>Tire/Wheel Notes</label><textarea id="tireNotes"></textarea></div>
+    </div>
+
+    <div class="section-card">
+      <h3>8. Priority Parts to Pull</h3>
+      <div class="subtitle" style="margin:0 0 8px;">Flag anything especially valuable so it gets pulled first.</div>
+      <div class="chk-grid" id="chkPriority"></div>
+      <div class="field" style="margin-top:10px;"><label>Other Priority Part</label><input type="text" id="priorityOther" placeholder="e.g. aftermarket stereo"></div>
+    </div>
+
+    <div class="section-card">
+      <h3>9. Photos</h3>
+      <div class="subtitle" style="margin:0 0 8px;">Tap to open the camera directly on phones/tablets. Add as many as you need.</div>
+      <input type="file" id="intakePhotoInput" accept="image/*" capture="environment" multiple>
+      <div class="photo-thumbs" id="intakePhotoThumbs"></div>
+    </div>
+
+    <div class="section-card">
+      <h3>10. Sign-off</h3>
+      <div class="form-grid">
+        <div class="field"><label>Tech Name *</label><input type="text" id="techName"></div>
+        <div class="field"><label>Date/Time Completed</label><input type="datetime-local" id="techDateTime"></div>
+      </div>
+    </div>
+
+    <button class="btn gold" id="submitIntakeBtn" style="font-size:15px;padding:12px 24px;" type="button">Save Intake &amp; Add to Lot</button>
+  </section>
+
+  <!-- VEHICLES -->
+  <section class="panel" id="panel-vehicles">
+    <h2>Vehicle Intake</h2>
+    <div class="subtitle">Log every vehicle when it arrives, before teardown. Stock # links to Parts Inventory.</div>
+    <div class="toolbar">
+      <input type="text" id="vehicleSearch" placeholder="Search stock #, VIN, make/model...">
+      <select id="vehicleStatusFilter"><option value="">All statuses</option></select>
+      <button class="btn" id="addVehicleBtn">+ Add Vehicle</button>
+    </div>
+    <div class="table-wrap"><table id="vehicleTable"></table></div>
+  </section>
+
+  <!-- PARTS -->
+  <section class="panel" id="panel-parts">
+    <h2>Parts Inventory</h2>
+    <div class="subtitle">Every part pulled from a vehicle. Grade per ARA standard — see Grading Reference tab.</div>
+    <div class="toolbar">
+      <input type="text" id="partSearch" placeholder="Search description, interchange #, part ID...">
+      <select id="partCategoryFilter"><option value="">All categories</option></select>
+      <select id="partGradeFilter"><option value="">All grades</option></select>
+      <select id="partStatusFilter"><option value="">All statuses</option></select>
+      <button class="btn" id="addPartBtn">+ Add Part</button>
+    </div>
+    <div class="table-wrap"><table id="partTable"></table></div>
+  </section>
+
+  <!-- SALES -->
+  <section class="panel" id="panel-sales">
+    <h2>Sales Log</h2>
+    <div class="subtitle">Recording a sale marks the linked part as Sold automatically.</div>
+    <div class="toolbar">
+      <input type="text" id="saleSearch" placeholder="Search customer, invoice, part...">
+      <button class="btn" id="addSaleBtn">+ Record Sale</button>
+    </div>
+    <div class="table-wrap"><table id="saleTable"></table></div>
+  </section>
+
+  <!-- CUSTOMERS -->
+  <section class="panel" id="panel-customers">
+    <h2>Customers</h2>
+    <div class="toolbar">
+      <input type="text" id="customerSearch" placeholder="Search name, phone, email...">
+      <button class="btn" id="addCustomerBtn">+ Add Customer</button>
+    </div>
+    <div class="table-wrap"><table id="customerTable"></table></div>
+  </section>
+
+  <!-- REFERENCE -->
+  <section class="panel" id="panel-reference">
+    <h2>Grading &amp; Pricing Reference</h2>
+    <div class="refnote">Based on the Automotive Recyclers Association (ARA) Parts Grading Guidelines. Price bands are starting estimates — review monthly against comparable listings and adjust for local demand.</div>
+    <div class="dash-grid">
+      <div class="card">
+        <h3>Part Grades</h3>
+        <table>
+          <tr><th>Grade</th><th>Body Parts</th><th>Mechanical Parts</th></tr>
+          <tr><td class="grade-A">A</td><td>1 unit of damage or less</td><td>Under 60,000 mi (or under 15,000 mi/model-year if higher)</td></tr>
+          <tr><td class="grade-B">B</td><td>2 units of damage or less</td><td>Up to 200,000 total miles</td></tr>
+          <tr><td class="grade-C">C</td><td>More than 2 units of damage</td><td>Over 200,000 total miles</td></tr>
+          <tr><td>X</td><td colspan="2">Not enough information to grade</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Damage Type Codes</h3>
+        <table id="damageTable"></table>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h3>Suggested Starting Price Bands</h3>
+      <table id="priceTable"></table>
+    </div>
+  </section>
+
+</main>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3 id="modalTitle">Add</h3>
+    <div class="form-grid" id="modalForm"></div>
+    <div class="modal-actions">
+      <button class="btn outline" id="modalCancel">Cancel</button>
+      <button class="btn" id="modalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /appShell -->
+
+<script>
+/* ---------------- Supabase client (raw fetch shim — no external SDK) ---------------- */
+const SUPABASE_URL = 'https://wnvqvbkgjrqjqyiiuygu.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndudnF2YmtnanJxanF5aWl1eWd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMTU4MDksImV4cCI6MjEwMTc5MTgwOX0.m3zm1nu4kJ8YHemNqI5Vo4albb8YM8iiddMS5cAN0Ro';
+const PHOTO_BUCKET = 'intake-photos';
+
+let _accessToken = null;
+try{ _accessToken = localStorage.getItem('rr_access_token') || null; }catch(e){}
+let _authChangeCb = null;
+
+function _authHeaders(json){
+  const h = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (_accessToken || SUPABASE_ANON_KEY) };
+  if(json) h['Content-Type'] = 'application/json';
+  return h;
+}
+
+class RRQuery {
+  constructor(table){ this.table = table; this.method = 'GET'; this.selectCols = '*'; this.filters = []; this.orderCol = null; this.orderAsc = true; this.body = null; }
+  select(cols){ this.selectCols = cols || '*'; return this; }
+  order(col, opts){ this.orderCol = col; this.orderAsc = !opts || opts.ascending !== false; return this; }
+  eq(col, val){ this.filters.push(col + '=eq.' + encodeURIComponent(val)); return this; }
+  insert(row){ this.method = 'POST'; this.body = row; return this; }
+  update(patch){ this.method = 'PATCH'; this.body = patch; return this; }
+  delete(){ this.method = 'DELETE'; return this; }
+  _url(){
+    let url = SUPABASE_URL + '/rest/v1/' + this.table;
+    const params = [];
+    if(this.method === 'GET') params.push('select=' + encodeURIComponent(this.selectCols));
+    if(this.orderCol) params.push('order=' + this.orderCol + '.' + (this.orderAsc ? 'asc' : 'desc'));
+    params.push(...this.filters);
+    if(params.length) url += '?' + params.join('&');
+    return url;
+  }
+  then(resolve, reject){
+    const headers = _authHeaders(true);
+    if(this.method === 'POST' || this.method === 'PATCH') headers['Prefer'] = 'return=representation';
+    const opts = { method: this.method, headers };
+    if(this.body !== null && this.method !== 'GET' && this.method !== 'DELETE') opts.body = JSON.stringify(this.body);
+    fetch(this._url(), opts).then(async res=>{
+      if(!res.ok){
+        let msg = res.statusText;
+        try{ const j = await res.json(); msg = j.message || j.msg || msg; }catch(e){}
+        resolve({ data: null, error: { message: msg } });
+        return;
+      }
+      if(this.method === 'DELETE'){ resolve({ data: null, error: null }); return; }
+      const text = await res.text();
+      resolve({ data: text ? JSON.parse(text) : null, error: null });
+    }).catch(err=> resolve({ data: null, error: { message: err.message || 'Network error' } }));
+  }
+}
+
+const sb = {
+  auth: {
+    async getSession(){
+      if(!_accessToken) return { data: { session: null } };
+      try{
+        const res = await fetch(SUPABASE_URL + '/auth/v1/user', { headers: _authHeaders(false) });
+        if(!res.ok){ _accessToken = null; try{ localStorage.removeItem('rr_access_token'); }catch(e){} return { data: { session: null } }; }
+        const user = await res.json();
+        return { data: { session: { user, access_token: _accessToken } } };
+      }catch(e){ return { data: { session: null } }; }
+    },
+    async signInWithPassword({ email, password }){
+      try{
+        const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+          body: JSON.stringify({ email, password }),
+        });
+        const json = await res.json();
+        if(!res.ok){ return { error: { message: json.error_description || json.msg || 'Login failed' } }; }
+        _accessToken = json.access_token;
+        try{ localStorage.setItem('rr_access_token', _accessToken); }catch(e){}
+        if(_authChangeCb) _authChangeCb('SIGNED_IN', { user: json.user, access_token: _accessToken });
+        return { error: null };
+      }catch(e){ return { error: { message: 'Network error' } }; }
+    },
+    async signOut(){
+      _accessToken = null;
+      try{ localStorage.removeItem('rr_access_token'); }catch(e){}
+      return {};
+    },
+    onAuthStateChange(cb){ _authChangeCb = cb; },
+  },
+  from(table){ return new RRQuery(table); },
+  storage: {
+    from(bucket){
+      return {
+        async upload(path, file, opts){
+          try{
+            const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + path, {
+              method: 'POST',
+              headers: Object.assign({ 'Content-Type': (opts && opts.contentType) || 'application/octet-stream' }, _authHeaders(false)),
+              body: file,
+            });
+            if(!res.ok){ const j = await res.json().catch(()=>({})); return { error: { message: j.message || 'Upload failed' } }; }
+            return { error: null };
+          }catch(e){ return { error: { message: 'Network error' } }; }
+        },
+        async remove(paths){
+          try{
+            const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + bucket, {
+              method: 'DELETE',
+              headers: _authHeaders(true),
+              body: JSON.stringify({ prefixes: paths }),
+            });
+            return { error: res.ok ? null : { message: 'Delete failed' } };
+          }catch(e){ return { error: { message: 'Network error' } }; }
+        },
+        getPublicUrl(path){
+          return { data: { publicUrl: SUPABASE_URL + '/storage/v1/object/public/' + bucket + '/' + path } };
+        },
+      };
+    },
+  },
+};
+
+let DB = { vehicles: [], parts: [], sales: [], customers: [], photos: [] };
+
+function photoUrl(path){ return sb.storage.from(PHOTO_BUCKET).getPublicUrl(path).data.publicUrl; }
+
+async function loadVehicles(){ const {data,error} = await sb.from('vehicles').select('*').order('created_at',{ascending:false}); if(error){console.error(error); alert('Could not load vehicles: '+error.message); return;} DB.vehicles = data||[]; }
+async function loadParts(){ const {data,error} = await sb.from('parts').select('*').order('created_at',{ascending:false}); if(error){console.error(error); alert('Could not load parts: '+error.message); return;} DB.parts = data||[]; }
+async function loadSales(){ const {data,error} = await sb.from('sales').select('*').order('date',{ascending:false}); if(error){console.error(error); alert('Could not load sales: '+error.message); return;} DB.sales = data||[]; }
+async function loadCustomers(){ const {data,error} = await sb.from('customers').select('*').order('created_at',{ascending:false}); if(error){console.error(error); alert('Could not load customers: '+error.message); return;} DB.customers = data||[]; }
+async function loadPhotos(){ const {data,error} = await sb.from('photos').select('*').order('taken_at',{ascending:false}); if(error){console.error(error); return;} DB.photos = data||[]; }
+async function loadAll(){ await Promise.all([loadVehicles(), loadParts(), loadSales(), loadCustomers(), loadPhotos()]); }
+
+async function insertRow(table, row){ const { error } = await sb.from(table).insert(row); if(error){ alert('Save failed: '+error.message); return false; } return true; }
+async function updateRow(table, idField, idVal, patch){ const { error } = await sb.from(table).update(patch).eq(idField, idVal); if(error){ alert('Save failed: '+error.message); return false; } return true; }
+async function deleteRow(table, idField, idVal){ const { error } = await sb.from(table).delete().eq(idField, idVal); if(error){ alert('Delete failed: '+error.message); return false; } return true; }
+
+async function uploadPhotos(files, entityType, entityId, takenBy){
+  const uploaded = [];
+  for(const file of files){
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const path = entityType+'/'+entityId+'/'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'_'+safeName;
+    const { error: upErr } = await sb.storage.from(PHOTO_BUCKET).upload(path, file, { upsert:false, contentType: file.type || 'image/jpeg' });
+    if(upErr){ alert('Photo upload failed: '+upErr.message); continue; }
+    const { error: insErr } = await sb.from('photos').insert({ entity_type: entityType, entity_id: entityId, storage_path: path, taken_by: takenBy||null });
+    if(insErr){ alert('Photo record failed: '+insErr.message); continue; }
+    uploaded.push(path);
+  }
+  await loadPhotos();
+  return uploaded;
+}
+async function deletePhoto(photoId, storagePath){
+  if(!confirm('Delete this photo?')) return;
+  await sb.storage.from(PHOTO_BUCKET).remove([storagePath]);
+  await sb.from('photos').delete().eq('id', photoId);
+  await loadPhotos();
+}
+
+/* ---------------- Options ---------------- */
+const OPT = {
+  vehicleSource: ['Purchased - Private','Purchased - Auction','Insurance Auction','Tow-In','Donation'],
+  titleStatus: ['Clean','Salvage','Parts Only','Junk'],
+  vehicleStatus: ['On Lot','Assessed','In Teardown','Parted Out','Crushed'],
+  category: ['Engine','Transmission','Body - Door','Body - Panel','Body - Bumper','Electrical','Interior','Wheel/Tire','Glass','Suspension','Exhaust','Cooling','Other'],
+  grade: ['A','B','C','X'],
+  yesNo: ['Yes','No'],
+  partStatus: ['Available','On Hold','Sold','Scrapped'],
+  paymentMethod: ['Cash','Card','Check','Invoice/Terms'],
+  coreReturned: ['Yes','No','N/A'],
+  fulfillment: ['Pickup','Local Delivery','Shipped'],
+  customerType: ['Retail','Wholesale - Shop','Wholesale - Recycler','Online'],
+};
+
+/* ---------------- Field configs (keys match DB columns) ---------------- */
+const VEHICLE_FIELDS = [
+  {k:'stock_no', l:'Stock #', req:true},
+  {k:'vin', l:'VIN'},
+  {k:'year', l:'Year', t:'number'},
+  {k:'make', l:'Make'},
+  {k:'model', l:'Model'},
+  {k:'trim', l:'Trim'},
+  {k:'engine', l:'Engine'},
+  {k:'transmission', l:'Transmission'},
+  {k:'drivetrain', l:'Drivetrain'},
+  {k:'body_class', l:'Body Class'},
+  {k:'plant', l:'Assembly Plant'},
+  {k:'mileage', l:'Mileage', t:'number'},
+  {k:'color', l:'Color'},
+  {k:'source', l:'Source', t:'select', opts:'vehicleSource'},
+  {k:'title_status', l:'Title Status', t:'select', opts:'titleStatus'},
+  {k:'intake_date', l:'Intake Date', t:'date'},
+  {k:'purchase_cost', l:'Purchase Cost', t:'number'},
+  {k:'yard_location', l:'Yard Location'},
+  {k:'status', l:'Status', t:'select', opts:'vehicleStatus'},
+  {k:'notes', l:'Notes', t:'textarea', span2:true},
+];
+const INTAKE_DETAIL_FIELDS = VEHICLE_FIELDS.filter(f=> !['stock_no','vin','intake_date','status','notes'].includes(f.k));
+const PART_FIELDS = [
+  {k:'part_id', l:'Part ID', req:true},
+  {k:'stock_no', l:'Stock # (Vehicle)', t:'vehicleSelect'},
+  {k:'category', l:'Category', t:'select', opts:'category'},
+  {k:'description', l:'Part Description', span2:true},
+  {k:'hollander_no', l:'Hollander Interchange #'},
+  {k:'grade', l:'Grade', t:'select', opts:'grade'},
+  {k:'damage_code', l:'Damage Code'},
+  {k:'mileage', l:'Mileage (if mech.)', t:'number'},
+  {k:'location', l:'Location/Bin'},
+  {k:'qty', l:'Qty', t:'number'},
+  {k:'core_charge', l:'Core Charge', t:'select', opts:'yesNo'},
+  {k:'list_price', l:'List Price', t:'number'},
+  {k:'cost_basis', l:'Cost Basis', t:'number'},
+  {k:'status', l:'Status', t:'select', opts:'partStatus'},
+  {k:'date_listed', l:'Date Listed', t:'date'},
+  {k:'photo_taken', l:'Photo Taken?', t:'select', opts:'yesNo'},
+  {k:'notes', l:'Notes', t:'textarea', span2:true},
+];
+const SALE_FIELDS = [
+  {k:'sale_id', l:'Sale ID', req:true},
+  {k:'date', l:'Date', t:'date'},
+  {k:'part_id', l:'Part', t:'partSelect'},
+  {k:'customer_id', l:'Customer', t:'customerSelect'},
+  {k:'sale_price', l:'Sale Price', t:'number'},
+  {k:'payment_method', l:'Payment Method', t:'select', opts:'paymentMethod'},
+  {k:'core_returned', l:'Core Returned', t:'select', opts:'coreReturned'},
+  {k:'fulfillment', l:'Fulfillment', t:'select', opts:'fulfillment'},
+  {k:'invoice_no', l:'Invoice #'},
+];
+const CUSTOMER_FIELDS = [
+  {k:'customer_id', l:'Customer ID', req:true},
+  {k:'name', l:'Name', span2:true},
+  {k:'type', l:'Type', t:'select', opts:'customerType'},
+  {k:'phone', l:'Phone'},
+  {k:'email', l:'Email'},
+  {k:'address', l:'Address', span2:true},
+  {k:'tax_exempt', l:'Tax-Exempt?', t:'select', opts:'yesNo'},
+  {k:'notes', l:'Notes', t:'textarea', span2:true},
+];
+
+/* ---------------- Utilities ---------------- */
+function nextId(prefix, arr, field){
+  let max = 0;
+  arr.forEach(r=>{ const m=String(r[field]||'').match(/(\d+)$/); if(m) max=Math.max(max, parseInt(m[1],10)); });
+  return prefix + (max+1);
+}
+function fmtMoney(n){ n = Number(n)||0; return '$' + n.toLocaleString(undefined,{minimumFractionDigits:0, maximumFractionDigits:2}); }
+function badgeClass(status){ return 'st-' + String(status).toLowerCase().replace(/[^a-z]/g,''); }
+function esc(s){ return String(s===undefined||s===null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------------- Tabs ---------------- */
+document.getElementById('tabs').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-tab]');
+  if(!btn) return;
+  const prevActive = document.querySelector('#tabs button.active');
+  if(prevActive && prevActive.dataset.tab==='intake' && btn.dataset.tab!=='intake'){ stopScan(); }
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+  if(btn.dataset.tab==='dashboard') renderDashboard();
+});
+
+/* ---------------- Modal / generic form ---------------- */
+const modalBg = document.getElementById('modalBg');
+const modalForm = document.getElementById('modalForm');
+const modalTitle = document.getElementById('modalTitle');
+let modalCtx = null;
+
+function createFieldInput(f, initialValue){
+  let input;
+  if(f.t==='select'){
+    input = document.createElement('select');
+    input.innerHTML = '<option value=""></option>' + OPT[f.opts].map(o=>`<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  } else if(f.t==='vehicleSelect'){
+    input = document.createElement('select');
+    input.innerHTML = '<option value=""></option>' + DB.vehicles.map(v=>`<option value="${esc(v.stock_no)}">${esc(v.stock_no)} — ${esc(v.year)} ${esc(v.make)} ${esc(v.model)}</option>`).join('');
+  } else if(f.t==='partSelect'){
+    input = document.createElement('select');
+    const avail = DB.parts.filter(p=> p.status==='Available' || p.part_id===initialValue);
+    input.innerHTML = '<option value=""></option>' + avail.map(p=>`<option value="${esc(p.part_id)}">${esc(p.part_id)} — ${esc(p.description)} (${fmtMoney(p.list_price)})</option>`).join('');
+  } else if(f.t==='customerSelect'){
+    input = document.createElement('select');
+    input.innerHTML = '<option value=""></option>' + DB.customers.map(c=>`<option value="${esc(c.customer_id)}">${esc(c.customer_id)} — ${esc(c.name)}</option>`).join('');
+  } else if(f.t==='textarea'){
+    input = document.createElement('textarea');
+  } else {
+    input = document.createElement('input');
+    input.type = f.t==='number' ? 'number' : (f.t==='date' ? 'date' : 'text');
+  }
+  input.dataset.key = f.k;
+  if(initialValue!==undefined && initialValue!==null) input.value = initialValue;
+  return input;
+}
+
+function openModal(title, fields, record, onSave){
+  modalTitle.textContent = title;
+  modalForm.innerHTML = '';
+  modalForm.className = 'form-grid';
+  document.getElementById('modalSave').style.display = '';
+  fields.forEach(f=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'field' + (f.span2 ? ' span2':'');
+    const label = document.createElement('label');
+    label.textContent = f.l + (f.req ? ' *':'');
+    wrap.appendChild(label);
+    const input = createFieldInput(f, record ? record[f.k] : undefined);
+    wrap.appendChild(input);
+    modalForm.appendChild(wrap);
+  });
+  modalCtx = { fields, record, onSave };
+  modalBg.classList.add('open');
+}
+document.getElementById('modalCancel').addEventListener('click', ()=> modalBg.classList.remove('open'));
+document.getElementById('modalSave').addEventListener('click', async ()=>{
+  if(!modalCtx || !modalCtx.fields.length) { modalBg.classList.remove('open'); return; }
+  const data = {};
+  modalForm.querySelectorAll('[data-key]').forEach(inp=>{ data[inp.dataset.key] = inp.value===''? null : inp.value; });
+  const reqField = modalCtx.fields.find(f=>f.req);
+  if(reqField && !data[reqField.k]){ alert(reqField.l + ' is required.'); return; }
+  const saveBtn = document.getElementById('modalSave');
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+  await modalCtx.onSave(data);
+  saveBtn.disabled = false; saveBtn.textContent = 'Save';
+  modalBg.classList.remove('open');
+});
+
+function showReadOnlyModal(title, html){
+  modalTitle.textContent = title;
+  modalForm.className = 'form-grid full';
+  modalForm.innerHTML = html;
+  document.getElementById('modalSave').style.display = 'none';
+  modalCtx = { fields: [], record: null, onSave: ()=>{} };
+  modalBg.classList.add('open');
+}
+
+/* ---------------- Photos modal (shared: vehicles + parts) ---------------- */
+function showPhotosModal(entityType, entityId, title){
+  const photos = DB.photos.filter(p=>p.entity_type===entityType && p.entity_id===entityId);
+  const thumbsHtml = photos.map(p=>`<div class="photo-thumb"><img src="${photoUrl(p.storage_path)}" loading="lazy"><button data-delphoto="${p.id}" data-path="${esc(p.storage_path)}" type="button">✕</button></div>`).join('') || '<div class="empty">No photos yet.</div>';
+  const html = `<div class="photo-thumbs" id="photoThumbsWrap">${thumbsHtml}</div><input type="file" id="entityPhotoInput" accept="image/*" capture="environment" multiple>`;
+  showReadOnlyModal('Photos — ' + title, html);
+  document.getElementById('entityPhotoInput').addEventListener('change', async e=>{
+    const files = Array.from(e.target.files||[]);
+    if(!files.length) return;
+    await uploadPhotos(files, entityType, entityId, null);
+    showPhotosModal(entityType, entityId, title);
+    if(entityType==='vehicle') renderVehicles(); else renderParts();
+  });
+  modalForm.querySelectorAll('[data-delphoto]').forEach(b=> b.onclick = async ()=>{
+    await deletePhoto(b.dataset.delphoto, b.dataset.path);
+    showPhotosModal(entityType, entityId, title);
+    if(entityType==='vehicle') renderVehicles(); else renderParts();
+  });
+}
+
+/* ---------------- Vehicles ---------------- */
+function renderVehicles(){
+  const search = document.getElementById('vehicleSearch').value.toLowerCase();
+  const statusF = document.getElementById('vehicleStatusFilter').value;
+  const selStatus = document.getElementById('vehicleStatusFilter');
+  if(selStatus.options.length<=1){ OPT.vehicleStatus.forEach(s=> selStatus.innerHTML += `<option value="${s}">${s}</option>`); }
+
+  const cols = ['stock_no','vin','year','make','model','trim','mileage','source','title_status','intake_date','purchase_cost','yard_location','status'];
+  const labels = ['Stock #','VIN','Year','Make','Model','Trim','Mileage','Source','Title','Intake Date','Cost','Location','Status','Checklist','Photos',''];
+  let rows = DB.vehicles.filter(v=>{
+    if(statusF && v.status!==statusF) return false;
+    if(search){
+      const hay = (v.stock_no+' '+v.vin+' '+v.make+' '+v.model).toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+  const table = document.getElementById('vehicleTable');
+  if(rows.length===0){ table.innerHTML = `<tr><td class="empty">No vehicles found.</td></tr>`; return; }
+  let html = '<tr>' + labels.map(l=>`<th>${l}</th>`).join('') + '</tr>';
+  rows.forEach(v=>{
+    const photoCount = DB.photos.filter(p=>p.entity_type==='vehicle' && p.entity_id===v.stock_no).length;
+    html += '<tr>' + cols.map(c=>{
+      if(c==='purchase_cost') return `<td>${fmtMoney(v[c])}</td>`;
+      if(c==='status') return `<td><span class="badge ${badgeClass(v.status)}">${esc(v.status)}</span></td>`;
+      return `<td>${esc(v[c])}</td>`;
+    }).join('') +
+    `<td>${v.checklist ? '<button class="btn small outline" data-viewchk="'+esc(v.stock_no)+'">View</button>' : '—'}</td>` +
+    `<td><button class="btn small outline" data-viewphotos="${esc(v.stock_no)}">Photos (${photoCount})</button></td>` +
+    `<td><button class="btn small outline" data-edit="${v.stock_no}">Edit</button> <button class="btn small danger" data-del="${v.stock_no}">Del</button></td></tr>`;
+  });
+  table.innerHTML = html;
+  table.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=>{
+    const rec = DB.vehicles.find(v=>v.stock_no===b.dataset.edit);
+    openModal('Edit Vehicle', VEHICLE_FIELDS, rec, async data=>{
+      const ok = await updateRow('vehicles','stock_no', rec.stock_no, data);
+      if(ok){ await loadVehicles(); renderVehicles(); renderDashboard(); }
+    });
+  });
+  table.querySelectorAll('[data-del]').forEach(b=> b.onclick = async ()=>{
+    if(!confirm('Delete vehicle '+b.dataset.del+'?')) return;
+    const ok = await deleteRow('vehicles','stock_no', b.dataset.del);
+    if(ok){ await loadVehicles(); renderVehicles(); renderDashboard(); }
+  });
+  table.querySelectorAll('[data-viewchk]').forEach(b=> b.onclick = ()=>{
+    const rec = DB.vehicles.find(v=>v.stock_no===b.dataset.viewchk);
+    if(rec) showChecklistModal(rec);
+  });
+  table.querySelectorAll('[data-viewphotos]').forEach(b=> b.onclick = ()=>{
+    showPhotosModal('vehicle', b.dataset.viewphotos, b.dataset.viewphotos);
+  });
+}
+document.getElementById('addVehicleBtn').addEventListener('click', ()=>{
+  openModal('Add Vehicle', VEHICLE_FIELDS, {stock_no: nextId('V-', DB.vehicles,'stock_no'), status:'On Lot'}, async data=>{
+    const ok = await insertRow('vehicles', data);
+    if(ok){ await loadVehicles(); renderVehicles(); renderDashboard(); }
+  });
+});
+document.getElementById('vehicleSearch').addEventListener('input', renderVehicles);
+document.getElementById('vehicleStatusFilter').addEventListener('change', renderVehicles);
+
+/* ---------------- New Intake (VIN scan/decode + checklist + photos) ---------------- */
+const CHECKLIST_SAFETY_ITEMS = ['Battery Disconnected','Fuel Drained/Removed','Engine Oil Drained','Coolant Drained','A/C Refrigerant Recovered'];
+const CHECKLIST_PRIORITY_ITEMS = ['Catalytic Converter','Infotainment/Navigation System','Wheels/Rims','Airbags (if not deployed)','Doors','Engine','Transmission'];
+const EXTERIOR_AREAS = ['Front','Rear','Left Side','Right Side','Roof','Glass'];
+const INTERIOR_AREAS = ['Seats','Dash/Electronics','Interior Airbags'];
+const CONDITION_OPTIONS = ['Good','Damaged','Missing'];
+
+let scanStream = null;
+let scanRAF = null;
+let intakePhotoFiles = [];
+
+function titleCase(s){ return String(s||'').toLowerCase().replace(/\b\w/g, c=>c.toUpperCase()); }
+
+function renderIntakeDetailsForm(prefill){
+  const wrap = document.getElementById('intakeDetailsForm');
+  wrap.innerHTML = '';
+  INTAKE_DETAIL_FIELDS.forEach(f=>{
+    const fw = document.createElement('div');
+    fw.className = 'field' + (f.span2 ? ' span2':'');
+    const label = document.createElement('label');
+    label.textContent = f.l;
+    fw.appendChild(label);
+    const input = createFieldInput(f, prefill ? prefill[f.k] : undefined);
+    fw.appendChild(input);
+    wrap.appendChild(fw);
+  });
+}
+
+function renderChecklistGroups(){
+  document.getElementById('chkSafety').innerHTML = CHECKLIST_SAFETY_ITEMS.map((label,i)=>
+    `<label class="chk-item"><input type="checkbox" data-safety="${i}"> ${esc(label)}</label>`).join('');
+  document.getElementById('chkPriority').innerHTML = CHECKLIST_PRIORITY_ITEMS.map((label,i)=>
+    `<label class="chk-item"><input type="checkbox" data-priority="${i}"> ${esc(label)}</label>`).join('');
+  document.getElementById('extGrid').innerHTML = EXTERIOR_AREAS.map(area=>
+    `<div class="cond-item"><label>${esc(area)}</label><select data-ext="${esc(area)}"><option value=""></option>${CONDITION_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
+  ).join('');
+  document.getElementById('intGrid').innerHTML = INTERIOR_AREAS.map(area=>
+    `<div class="cond-item"><label>${esc(area)}</label><select data-int="${esc(area)}"><option value=""></option>${CONDITION_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
+  ).join('');
+}
+
+function renderIntakePhotoThumbs(){
+  const wrap = document.getElementById('intakePhotoThumbs');
+  wrap.innerHTML = intakePhotoFiles.map((f,i)=>`<div class="photo-thumb"><img src="${URL.createObjectURL(f)}"><button data-rmphoto="${i}" type="button">✕</button></div>`).join('');
+  wrap.querySelectorAll('[data-rmphoto]').forEach(b=> b.onclick = ()=>{
+    intakePhotoFiles.splice(parseInt(b.dataset.rmphoto,10),1);
+    renderIntakePhotoThumbs();
+  });
+}
+document.getElementById('intakePhotoInput').addEventListener('change', e=>{
+  const files = Array.from(e.target.files||[]);
+  intakePhotoFiles = intakePhotoFiles.concat(files);
+  renderIntakePhotoThumbs();
+  e.target.value = '';
+});
+
+function resetIntakeForm(keepTech){
+  document.getElementById('intakeVin').value = '';
+  document.getElementById('decodeResult').innerHTML = '';
+  stopScan();
+  renderIntakeDetailsForm(null);
+  renderChecklistGroups();
+  intakePhotoFiles = [];
+  renderIntakePhotoThumbs();
+  ['drStarts','drTrans','drNotes','extNotes','intNotes','tireTread','tireSpare','wheelCond','tireNotes','priorityOther','airbagStatus','catPresent']
+    .forEach(id=>{ document.getElementById(id).value = ''; });
+  if(!keepTech) document.getElementById('techName').value = '';
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('techDateTime').value = now.toISOString().slice(0,16);
+}
+
+async function decodeVin(){
+  const vin = document.getElementById('intakeVin').value.trim().toUpperCase();
+  document.getElementById('intakeVin').value = vin;
+  const resultBox = document.getElementById('decodeResult');
+  if(vin.length !== 17){
+    resultBox.innerHTML = '<div class="decode-result err">VIN should be 17 characters (entered '+vin.length+'). You can still fill in details manually below.</div>';
+    return;
+  }
+  resultBox.innerHTML = '<div class="decode-result">Looking up VIN…</div>';
+  try{
+    const res = await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/decodevinvaluesextended/'+encodeURIComponent(vin)+'?format=json');
+    const json = await res.json();
+    const r = json.Results && json.Results[0];
+    if(!r){ resultBox.innerHTML = '<div class="decode-result err">No data returned for this VIN. Fill in details manually below.</div>'; return; }
+    const prefill = {
+      year: r.ModelYear || '',
+      make: titleCase(r.Make),
+      model: r.Model || '',
+      trim: r.Trim || '',
+      engine: [r.EngineCylinders && (r.EngineCylinders+'-cyl'), r.DisplacementL && (r.DisplacementL+'L'), r.FuelTypePrimary].filter(Boolean).join(' '),
+      transmission: r.TransmissionStyle || '',
+      drivetrain: r.DriveType || '',
+      body_class: r.BodyClass || '',
+      plant: [r.PlantCity, r.PlantState, r.PlantCountry].filter(Boolean).join(', '),
+    };
+    renderIntakeDetailsForm(prefill);
+    let warn = '';
+    if(r.ErrorCode && r.ErrorCode !== '0'){
+      warn = '<div class="warn-banner">NHTSA note: '+esc(r.ErrorText || 'Some fields may be incomplete for this VIN.')+' Please double-check the details below.</div>';
+    }
+    const summary = [prefill.year, prefill.make, prefill.model, prefill.trim].filter(Boolean).join(' ');
+    resultBox.innerHTML = warn + '<div class="decode-result">Decoded: '+esc(summary || 'partial data only')+'. Review the fields below and correct anything that looks off before saving.</div>';
+  }catch(err){
+    resultBox.innerHTML = '<div class="decode-result err">Could not reach the VIN decoder (check internet connection). Enter vehicle details manually below.</div>';
+  }
+}
+document.getElementById('decodeVinBtn').addEventListener('click', decodeVin);
+
+function stopScan(){
+  if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream = null; }
+  if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+  const area = document.getElementById('scanArea');
+  if(area) area.innerHTML = '';
+}
+
+async function startScan(){
+  const scanArea = document.getElementById('scanArea');
+  scanArea.innerHTML = '';
+  if(!('BarcodeDetector' in window)){
+    scanArea.innerHTML = '<div class="warn-banner">This browser doesn\'t support camera barcode scanning (works best in Chrome/Edge on Android or desktop). Type the VIN manually above instead.</div>';
+    return;
+  }
+  if(!window.isSecureContext){
+    scanArea.innerHTML = '<div class="warn-banner">Camera scanning needs HTTPS. Type the VIN manually above instead.</div>';
+    return;
+  }
+  let detector;
+  try{ detector = new BarcodeDetector({formats:['code_39','code_128','codabar','ean_13']}); }
+  catch(e){ scanArea.innerHTML = '<div class="warn-banner">Barcode scanning isn\'t available on this device. Type the VIN manually above instead.</div>'; return; }
+  try{
+    scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  }catch(err){
+    scanArea.innerHTML = '<div class="warn-banner">Camera access was blocked or unavailable. Type the VIN manually above instead.</div>';
+    return;
+  }
+  scanArea.innerHTML = '<div class="scan-box"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-frame"></div></div>'+
+    '<button class="btn outline small" id="stopScanBtn" type="button" style="margin-top:6px;">Stop Camera</button>'+
+    '<div class="subtitle" style="margin:6px 0 0;">Point the camera at the VIN barcode (door jamb sticker or dash).</div>';
+  const video = document.getElementById('scanVideo');
+  video.srcObject = scanStream;
+  document.getElementById('stopScanBtn').onclick = stopScan;
+  const loop = async ()=>{
+    if(!scanStream) return;
+    try{
+      const codes = await detector.detect(video);
+      for(const c of codes){
+        const raw = (c.rawValue||'').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
+        if(raw.length===17){
+          document.getElementById('intakeVin').value = raw;
+          stopScan();
+          decodeVin();
+          return;
+        }
+      }
+    }catch(e){ /* frame not ready yet, keep trying */ }
+    scanRAF = requestAnimationFrame(loop);
+  };
+  scanRAF = requestAnimationFrame(loop);
+}
+document.getElementById('scanVinBtn').addEventListener('click', startScan);
+
+document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
+  const vin = document.getElementById('intakeVin').value.trim().toUpperCase();
+  const techName = document.getElementById('techName').value.trim();
+  if(!techName){ alert('Tech Name is required before saving.'); return; }
+  if(vin && !/^[A-HJ-NPR-Z0-9]{17}$/i.test(vin)){
+    if(!confirm('That VIN doesn\'t look like a valid 17-character VIN. Save anyway?')) return;
+  }
+  const stockNo = nextId('V-', DB.vehicles, 'stock_no');
+  const vehicleData = { stock_no: stockNo, vin: vin||null, status:'Assessed', intake_date: new Date().toISOString().slice(0,10) };
+  document.querySelectorAll('#intakeDetailsForm [data-key]').forEach(inp=>{ vehicleData[inp.dataset.key] = inp.value===''? null : inp.value; });
+
+  const safety = {};
+  CHECKLIST_SAFETY_ITEMS.forEach((label,i)=>{ const el=document.querySelector('[data-safety="'+i+'"]'); safety[label] = !!(el && el.checked); });
+  const priority = {};
+  CHECKLIST_PRIORITY_ITEMS.forEach((label,i)=>{ const el=document.querySelector('[data-priority="'+i+'"]'); priority[label] = !!(el && el.checked); });
+  const exterior = {};
+  EXTERIOR_AREAS.forEach(area=>{ const el=document.querySelector('[data-ext="'+area+'"]'); exterior[area] = el ? el.value : ''; });
+  const interior = {};
+  INTERIOR_AREAS.forEach(area=>{ const el=document.querySelector('[data-int="'+area+'"]'); interior[area] = el ? el.value : ''; });
+
+  vehicleData.checklist = {
+    completedBy: techName,
+    completedAt: document.getElementById('techDateTime').value,
+    safety,
+    airbagStatus: document.getElementById('airbagStatus').value,
+    catConverterPresent: document.getElementById('catPresent').value,
+    drivability: { starts: document.getElementById('drStarts').value, transmissionEngages: document.getElementById('drTrans').value, notes: document.getElementById('drNotes').value },
+    exterior, exteriorNotes: document.getElementById('extNotes').value,
+    interior, interiorNotes: document.getElementById('intNotes').value,
+    tires: { treadOk: document.getElementById('tireTread').value, sparePresent: document.getElementById('tireSpare').value, wheelCondition: document.getElementById('wheelCond').value, notes: document.getElementById('tireNotes').value },
+    priority, priorityOther: document.getElementById('priorityOther').value,
+    photosTaken: intakePhotoFiles.length > 0 ? 'Yes' : 'No',
+  };
+
+  const btn = document.getElementById('submitIntakeBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const ok = await insertRow('vehicles', vehicleData);
+  if(ok && intakePhotoFiles.length){
+    btn.textContent = 'Uploading photos…';
+    await uploadPhotos(intakePhotoFiles, 'vehicle', stockNo, techName);
+  }
+  btn.disabled = false; btn.textContent = 'Save Intake & Add to Lot';
+  if(!ok) return;
+  alert('Intake saved as ' + stockNo + '. It now appears in Vehicle Intake.');
+  resetIntakeForm(true);
+  await loadVehicles();
+  renderVehicles();
+  renderDashboard();
+  document.querySelector('#tabs button[data-tab="vehicles"]').click();
+});
+
+function showChecklistModal(v){
+  const c = v.checklist;
+  if(!c){ alert('No checklist on file for this vehicle.'); return; }
+  const yn = b => b ? 'Yes' : 'No';
+  const safetyRows = Object.entries(c.safety||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${yn(val)}</dd>`).join('');
+  const extRows = Object.entries(c.exterior||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
+  const intRows = Object.entries(c.interior||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
+  const flagged = Object.entries(c.priority||{}).filter(([,val])=>val).map(([k])=>`<dt>Flagged</dt><dd>${esc(k)}</dd>`).join('');
+  const html = `<div class="checklist-view">
+    <h4>Sign-off</h4>
+    <dl><dt>Completed By</dt><dd>${esc(c.completedBy)}</dd><dt>Date/Time</dt><dd>${esc(c.completedAt)}</dd><dt>Photos Taken</dt><dd>${esc(c.photosTaken)||'—'}</dd></dl>
+    <h4>Safety &amp; Fluids</h4>
+    <dl>${safetyRows}<dt>Airbags</dt><dd>${esc(c.airbagStatus)||'—'}</dd><dt>Catalytic Converter</dt><dd>${esc(c.catConverterPresent)||'—'}</dd></dl>
+    <h4>Drivability</h4>
+    <dl><dt>Starts &amp; Runs</dt><dd>${esc((c.drivability||{}).starts)||'—'}</dd><dt>Transmission</dt><dd>${esc((c.drivability||{}).transmissionEngages)||'—'}</dd><dt>Notes</dt><dd>${esc((c.drivability||{}).notes)||'—'}</dd></dl>
+    <h4>Exterior</h4>
+    <dl>${extRows}<dt>Notes</dt><dd>${esc(c.exteriorNotes)||'—'}</dd></dl>
+    <h4>Interior</h4>
+    <dl>${intRows}<dt>Notes</dt><dd>${esc(c.interiorNotes)||'—'}</dd></dl>
+    <h4>Tires &amp; Wheels</h4>
+    <dl><dt>Tread OK</dt><dd>${esc((c.tires||{}).treadOk)||'—'}</dd><dt>Spare Present</dt><dd>${esc((c.tires||{}).sparePresent)||'—'}</dd><dt>Wheel Condition</dt><dd>${esc((c.tires||{}).wheelCondition)||'—'}</dd><dt>Notes</dt><dd>${esc((c.tires||{}).notes)||'—'}</dd></dl>
+    <h4>Priority Parts to Pull</h4>
+    <dl>${flagged || '<dt>None flagged</dt><dd>—</dd>'}${c.priorityOther ? '<dt>Other</dt><dd>'+esc(c.priorityOther)+'</dd>' : ''}</dl>
+  </div>`;
+  showReadOnlyModal('Intake Checklist — ' + v.stock_no, html);
+}
+
+/* ---------------- Parts ---------------- */
+function renderParts(){
+  const search = document.getElementById('partSearch').value.toLowerCase();
+  const catF = document.getElementById('partCategoryFilter').value;
+  const gradeF = document.getElementById('partGradeFilter').value;
+  const statusF = document.getElementById('partStatusFilter').value;
+
+  const catSel = document.getElementById('partCategoryFilter');
+  if(catSel.options.length<=1){ OPT.category.forEach(s=> catSel.innerHTML += `<option value="${s}">${s}</option>`); }
+  const gradeSel = document.getElementById('partGradeFilter');
+  if(gradeSel.options.length<=1){ OPT.grade.forEach(s=> gradeSel.innerHTML += `<option value="${s}">${s}</option>`); }
+  const statusSel = document.getElementById('partStatusFilter');
+  if(statusSel.options.length<=1){ OPT.partStatus.forEach(s=> statusSel.innerHTML += `<option value="${s}">${s}</option>`); }
+
+  let rows = DB.parts.filter(p=>{
+    if(catF && p.category!==catF) return false;
+    if(gradeF && p.grade!==gradeF) return false;
+    if(statusF && p.status!==statusF) return false;
+    if(search){
+      const hay = (p.part_id+' '+p.description+' '+p.hollander_no).toLowerCase();
+      if(!hay.includes(search)) return false;
+    }
+    return true;
+  });
+  const cols = ['part_id','stock_no','category','description','hollander_no','grade','location','qty','list_price','status'];
+  const labels = ['Part ID','Vehicle','Category','Description','Interchange #','Grade','Location','Qty','List Price','Status','Photos',''];
+  const table = document.getElementById('partTable');
+  if(rows.length===0){ table.innerHTML = `<tr><td class="empty">No parts found.</td></tr>`; return; }
+  let html = '<tr>' + labels.map(l=>`<th>${l}</th>`).join('') + '</tr>';
+  rows.forEach(p=>{
+    const photoCount = DB.photos.filter(ph=>ph.entity_type==='part' && ph.entity_id===p.part_id).length;
+    html += '<tr>' + cols.map(c=>{
+      if(c==='list_price') return `<td>${fmtMoney(p[c])}</td>`;
+      if(c==='grade') return `<td class="grade-${esc(p.grade)}">${esc(p.grade)}</td>`;
+      if(c==='status') return `<td><span class="badge ${badgeClass(p.status)}">${esc(p.status)}</span></td>`;
+      return `<td>${esc(p[c])}</td>`;
+    }).join('') +
+    `<td><button class="btn small outline" data-viewphotos="${esc(p.part_id)}">Photos (${photoCount})</button></td>` +
+    `<td><button class="btn small outline" data-edit="${p.part_id}">Edit</button> <button class="btn small danger" data-del="${p.part_id}">Del</button></td></tr>`;
+  });
+  table.innerHTML = html;
+  table.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=>{
+    const rec = DB.parts.find(p=>p.part_id===b.dataset.edit);
+    openModal('Edit Part', PART_FIELDS, rec, async data=>{
+      const ok = await updateRow('parts','part_id', rec.part_id, data);
+      if(ok){ await loadParts(); renderParts(); renderDashboard(); }
+    });
+  });
+  table.querySelectorAll('[data-del]').forEach(b=> b.onclick = async ()=>{
+    if(!confirm('Delete part '+b.dataset.del+'?')) return;
+    const ok = await deleteRow('parts','part_id', b.dataset.del);
+    if(ok){ await loadParts(); renderParts(); renderDashboard(); }
+  });
+  table.querySelectorAll('[data-viewphotos]').forEach(b=> b.onclick = ()=>{
+    showPhotosModal('part', b.dataset.viewphotos, b.dataset.viewphotos);
+  });
+}
+document.getElementById('addPartBtn').addEventListener('click', ()=>{
+  openModal('Add Part', PART_FIELDS, {part_id: nextId('P-', DB.parts,'part_id'), status:'Available', qty:1}, async data=>{
+    const ok = await insertRow('parts', data);
+    if(ok){ await loadParts(); renderParts(); renderDashboard(); }
+  });
+});
+['partSearch'].forEach(id=> document.getElementById(id).addEventListener('input', renderParts));
+['partCategoryFilter','partGradeFilter','partStatusFilter'].forEach(id=> document.getElementById(id).addEventListener('change', renderParts));
+
+/* ---------------- Sales ---------------- */
+function renderSales(){
+  const search = document.getElementById('saleSearch').value.toLowerCase();
+  let rows = DB.sales.filter(s=>{
+    if(!search) return true;
+    const cust = (DB.customers.find(c=>c.customer_id===s.customer_id)||{}).name || '';
+    const part = (DB.parts.find(p=>p.part_id===s.part_id)||{}).description || '';
+    const hay = (s.sale_id+' '+s.invoice_no+' '+cust+' '+part).toLowerCase();
+    return hay.includes(search);
+  }).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  const table = document.getElementById('saleTable');
+  if(rows.length===0){ table.innerHTML = `<tr><td class="empty">No sales recorded yet.</td></tr>`; return; }
+  let html = '<tr><th>Sale ID</th><th>Date</th><th>Part</th><th>Customer</th><th>Price</th><th>Payment</th><th>Core Returned</th><th>Fulfillment</th><th>Invoice #</th><th></th></tr>';
+  rows.forEach(s=>{
+    const part = DB.parts.find(p=>p.part_id===s.part_id);
+    const cust = DB.customers.find(c=>c.customer_id===s.customer_id);
+    html += `<tr>
+      <td>${esc(s.sale_id)}</td><td>${esc(s.date)}</td>
+      <td>${esc(part? part.part_id+' — '+part.description : s.part_id)}</td>
+      <td>${esc(cust? cust.name : s.customer_id)}</td>
+      <td>${fmtMoney(s.sale_price)}</td><td>${esc(s.payment_method)}</td>
+      <td>${esc(s.core_returned)}</td><td>${esc(s.fulfillment)}</td><td>${esc(s.invoice_no)}</td>
+      <td><button class="btn small outline" data-edit="${s.sale_id}">Edit</button> <button class="btn small danger" data-del="${s.sale_id}">Del</button></td>
+    </tr>`;
+  });
+  table.innerHTML = html;
+  table.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=>{
+    const rec = DB.sales.find(s=>s.sale_id===b.dataset.edit);
+    openModal('Edit Sale', SALE_FIELDS, rec, async data=>{
+      const ok = await updateRow('sales','sale_id', rec.sale_id, data);
+      if(ok){ await loadSales(); renderSales(); renderParts(); renderDashboard(); }
+    });
+  });
+  table.querySelectorAll('[data-del]').forEach(b=> b.onclick = async ()=>{
+    if(!confirm('Delete sale '+b.dataset.del+'? The linked part will be set back to Available.')) return;
+    const sale = DB.sales.find(s=>s.sale_id===b.dataset.del);
+    if(sale && sale.part_id){ await updateRow('parts','part_id', sale.part_id, {status:'Available'}); }
+    const ok = await deleteRow('sales','sale_id', b.dataset.del);
+    if(ok){ await loadSales(); await loadParts(); renderSales(); renderParts(); renderDashboard(); }
+  });
+}
+document.getElementById('addSaleBtn').addEventListener('click', ()=>{
+  const availCount = DB.parts.filter(p=>p.status==='Available').length;
+  if(availCount===0){ alert('No available parts to sell. Add parts first.'); return; }
+  openModal('Record Sale', SALE_FIELDS, {sale_id: nextId('S-', DB.sales,'sale_id'), date: new Date().toISOString().slice(0,10)}, async data=>{
+    const ok = await insertRow('sales', data);
+    if(ok){
+      const part = DB.parts.find(p=>p.part_id===data.part_id);
+      const patch = { status:'Sold' };
+      if(part && !data.sale_price){ await updateRow('sales','sale_id', data.sale_id, {sale_price: part.list_price}); }
+      if(data.part_id) await updateRow('parts','part_id', data.part_id, patch);
+      await loadSales(); await loadParts(); renderSales(); renderParts(); renderDashboard();
+    }
+  });
+});
+document.getElementById('saleSearch').addEventListener('input', renderSales);
+
+/* ---------------- Customers ---------------- */
+function renderCustomers(){
+  const search = document.getElementById('customerSearch').value.toLowerCase();
+  let rows = DB.customers.filter(c=>{
+    if(!search) return true;
+    return (c.name+' '+c.phone+' '+c.email).toLowerCase().includes(search);
+  });
+  const table = document.getElementById('customerTable');
+  if(rows.length===0){ table.innerHTML = `<tr><td class="empty">No customers yet.</td></tr>`; return; }
+  let html = '<tr><th>ID</th><th>Name</th><th>Type</th><th>Phone</th><th>Email</th><th>Address</th><th>Tax-Exempt</th><th></th></tr>';
+  rows.forEach(c=>{
+    html += `<tr><td>${esc(c.customer_id)}</td><td>${esc(c.name)}</td><td>${esc(c.type)}</td><td>${esc(c.phone)}</td><td>${esc(c.email)}</td><td>${esc(c.address)}</td><td>${esc(c.tax_exempt)}</td>
+    <td><button class="btn small outline" data-edit="${c.customer_id}">Edit</button> <button class="btn small danger" data-del="${c.customer_id}">Del</button></td></tr>`;
+  });
+  table.innerHTML = html;
+  table.querySelectorAll('[data-edit]').forEach(b=> b.onclick = ()=>{
+    const rec = DB.customers.find(c=>c.customer_id===b.dataset.edit);
+    openModal('Edit Customer', CUSTOMER_FIELDS, rec, async data=>{
+      const ok = await updateRow('customers','customer_id', rec.customer_id, data);
+      if(ok){ await loadCustomers(); renderCustomers(); }
+    });
+  });
+  table.querySelectorAll('[data-del]').forEach(b=> b.onclick = async ()=>{
+    if(!confirm('Delete customer '+b.dataset.del+'?')) return;
+    const ok = await deleteRow('customers','customer_id', b.dataset.del);
+    if(ok){ await loadCustomers(); renderCustomers(); }
+  });
+}
+document.getElementById('addCustomerBtn').addEventListener('click', ()=>{
+  openModal('Add Customer', CUSTOMER_FIELDS, {customer_id: nextId('C-', DB.customers,'customer_id')}, async data=>{
+    const ok = await insertRow('customers', data);
+    if(ok){ await loadCustomers(); renderCustomers(); }
+  });
+});
+document.getElementById('customerSearch').addEventListener('input', renderCustomers);
+
+/* ---------------- Reference tables ---------------- */
+function renderReference(){
+  const damage = [['B','Burn'],['C','Crease'],['D','Dent'],['E','Bent'],['F','Finish'],['H','Hail'],['J','Rip/Crack'],['K','Buckle'],['L','Lip'],['P','Parking Lot Ding'],['R','Rust on Surface'],['S','Scratch - Surface Only'],['T','Paint Problem']];
+  document.getElementById('damageTable').innerHTML = '<tr><th>Code</th><th>Meaning</th></tr>' + damage.map(d=>`<tr><td>${d[0]}</td><td>${d[1]}</td></tr>`).join('');
+  const price = [
+    ['Engine','$900 - $2,000','$500 - $900','$150 - $500'],
+    ['Transmission','$600 - $1,200','$350 - $600','$100 - $350'],
+    ['Body Panel','$150 - $500','$75 - $150','$25 - $75'],
+    ['Electrical (alt/starter/ECU)','$60 - $150','$35 - $60','$15 - $35'],
+    ['Wheel/Tire (each)','$60 - $120','$35 - $60','$15 - $35'],
+  ];
+  document.getElementById('priceTable').innerHTML = '<tr><th>Category</th><th>Grade A</th><th>Grade B</th><th>Grade C</th></tr>' + price.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+}
+
+/* ---------------- Dashboard ---------------- */
+function renderDashboard(){
+  const available = DB.parts.filter(p=>p.status==='Available');
+  const totalValue = available.reduce((s,p)=> s + (Number(p.list_price)||0)*(Number(p.qty)||1), 0);
+  const now = new Date();
+  const thisMonth = DB.sales.filter(s=>{ const d=new Date(s.date); return d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth(); });
+  const monthRevenue = thisMonth.reduce((s,r)=> s + (Number(r.sale_price)||0), 0);
+  const totalRevenue = DB.sales.reduce((s,r)=> s + (Number(r.sale_price)||0), 0);
+
+  const kpis = [
+    {num: DB.vehicles.length, lbl:'Vehicles in system'},
+    {num: available.length, lbl:'Parts available'},
+    {num: fmtMoney(totalValue), lbl:'Available inventory value'},
+    {num: fmtMoney(monthRevenue), lbl:'Revenue this month'},
+    {num: fmtMoney(totalRevenue), lbl:'Total revenue (all time)'},
+    {num: DB.customers.length, lbl:'Customers on file'},
+  ];
+  document.getElementById('kpiRow').innerHTML = kpis.map(k=>`<div class="kpi"><div class="num">${k.num}</div><div class="lbl">${k.lbl}</div></div>`).join('');
+
+  const byCat = {};
+  available.forEach(p=>{ byCat[p.category] = (byCat[p.category]||0) + (Number(p.list_price)||0)*(Number(p.qty)||1); });
+  const maxVal = Math.max(1, ...Object.values(byCat));
+  const catEntries = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('catBars').innerHTML = catEntries.length ? catEntries.map(([cat,val])=>`
+    <div class="bar-row"><div style="width:140px;">${esc(cat)}</div><div class="bar-track"><div class="bar-fill" style="width:${(val/maxVal*100).toFixed(0)}%"></div></div><div style="width:70px;text-align:right;">${fmtMoney(val)}</div></div>
+  `).join('') : '<div class="empty">No available parts yet.</div>';
+
+  const aging = available.filter(p=>{
+    if(!p.date_listed) return false;
+    const days = (now - new Date(p.date_listed)) / 86400000;
+    return days > 60;
+  }).sort((a,b)=> new Date(a.date_listed)-new Date(b.date_listed));
+  document.getElementById('agingList').innerHTML = aging.length ? '<table style="width:100%;"><tr><th>Part</th><th>Listed</th><th>Price</th></tr>' +
+    aging.map(p=>`<tr><td>${esc(p.description)}</td><td>${esc(p.date_listed)}</td><td>${fmtMoney(p.list_price)}</td></tr>`).join('') + '</table>'
+    : '<div class="empty">Nothing aging past 60 days.</div>';
+}
+
+/* ---------------- CSV helpers ---------------- */
+function toCSV(rows, cols){
+  const esc2 = v => { v = v===undefined||v===null?'':String(v); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+  return [cols.join(',')].concat(rows.map(r=> cols.map(c=>esc2(r[c])).join(','))).join('\n');
+}
+function downloadCSV(csv, filename){
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+function parseCSVLine(line){
+  const result = [];
+  let cur = '', inQuotes = false;
+  for(let i=0;i<line.length;i++){
+    const ch = line[i];
+    if(inQuotes){
+      if(ch === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; } else { inQuotes = false; }
+      } else { cur += ch; }
+    } else {
+      if(ch === '"'){ inQuotes = true; }
+      else if(ch === ','){ result.push(cur); cur = ''; }
+      else { cur += ch; }
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+/* ---------------- Export: internal CSV (with photo URLs) ---------------- */
+document.getElementById('exportAllBtn').addEventListener('click', ()=>{
+  const partCols = PART_FIELDS.map(f=>f.k).concat(['photo_urls']);
+  const rows = DB.parts.map(p=>{
+    const urls = DB.photos.filter(ph=>ph.entity_type==='part' && ph.entity_id===p.part_id).map(ph=>photoUrl(ph.storage_path));
+    return Object.assign({}, p, {photo_urls: urls.join(' | ')});
+  });
+  downloadCSV(toCSV(rows, partCols), 'ruby-recycling-parts-inventory.csv');
+});
+
+/* ---------------- Export: marketplace feed (eBay/Car-Part/general) ---------------- */
+document.getElementById('exportMarketBtn').addEventListener('click', ()=>{
+  const available = DB.parts.filter(p=>p.status==='Available');
+  const cols = ['SKU','Title','Description','Category','Condition_Grade','Price','Quantity','Interchange_Number','Compatible_Year','Compatible_Make','Compatible_Model','Compatible_Trim','VIN_Source_Vehicle','Photo_URL_1','Photo_URL_2','Photo_URL_3','Photo_URL_4'];
+  const rows = available.map(p=>{
+    const v = DB.vehicles.find(veh=>veh.stock_no===p.stock_no) || {};
+    const urls = DB.photos.filter(ph=>ph.entity_type==='part' && ph.entity_id===p.part_id).map(ph=>photoUrl(ph.storage_path));
+    const title = [v.year, v.make, v.model, p.description, 'Grade '+(p.grade||'')].filter(Boolean).join(' ').slice(0,80);
+    return {
+      SKU: p.part_id,
+      Title: title,
+      Description: p.description + (p.damage_code ? (' — Damage code: '+p.damage_code) : '') + (p.notes ? (' — '+p.notes) : ''),
+      Category: p.category,
+      Condition_Grade: p.grade,
+      Price: p.list_price,
+      Quantity: p.qty,
+      Interchange_Number: p.hollander_no,
+      Compatible_Year: v.year,
+      Compatible_Make: v.make,
+      Compatible_Model: v.model,
+      Compatible_Trim: v.trim,
+      VIN_Source_Vehicle: v.vin,
+      Photo_URL_1: urls[0]||'', Photo_URL_2: urls[1]||'', Photo_URL_3: urls[2]||'', Photo_URL_4: urls[3]||'',
+    };
+  });
+  downloadCSV(toCSV(rows, cols), 'ruby-recycling-marketplace-export.csv');
+  alert('Export ready. This is a general-purpose feed (works as a starting template for eBay Motors Parts, Car-Part.com, or similar bulk upload tools) — each platform may need minor column remapping.');
+});
+
+document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async evt=>{
+    const text = evt.target.result;
+    const lines = text.split(/\r?\n/).filter(l=>l.length);
+    if(lines.length < 2){ alert('No data rows found in file.'); return; }
+    const headers = parseCSVLine(lines[0]).map(h=>h.trim());
+    let added = 0, updated = 0;
+    for(let i=1;i<lines.length;i++){
+      const vals = parseCSVLine(lines[i]);
+      const rec = {};
+      headers.forEach((h,idx)=>{ if(h==='photo_urls') return; rec[h] = vals[idx]!==undefined && vals[idx]!=='' ? vals[idx] : null; });
+      if(!rec.part_id) continue;
+      const existing = DB.parts.find(p=>p.part_id===rec.part_id);
+      if(existing){ await updateRow('parts','part_id', rec.part_id, rec); updated++; }
+      else { await insertRow('parts', rec); added++; }
+    }
+    await loadParts();
+    renderParts();
+    renderDashboard();
+    alert(added + ' part(s) added, ' + updated + ' updated.');
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+/* ---------------- Auth ---------------- */
+async function onLoggedIn(session){
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('appShell').style.display = 'block';
+  document.getElementById('userChip').textContent = session.user.email;
+  await loadAll();
+  renderChecklistGroups();
+  resetIntakeForm(true);
+  renderVehicles();
+  renderParts();
+  renderSales();
+  renderCustomers();
+  renderReference();
+  renderDashboard();
+}
+document.getElementById('loginBtn').addEventListener('click', async ()=>{
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errBox = document.getElementById('loginErr');
+  errBox.textContent = '';
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.disabled = true; loginBtn.textContent = 'Logging in…';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  loginBtn.disabled = false; loginBtn.textContent = 'Log In';
+  if(error){ errBox.textContent = error.message; }
+});
+document.getElementById('loginPassword').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('loginBtn').click(); });
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  document.getElementById('appShell').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+});
+
+(async function initAuth(){
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){ await onLoggedIn(session); }
+  sb.auth.onAuthStateChange((event, sess)=>{
+    if(event==='SIGNED_IN'){ onLoggedIn(sess); }
+  });
+})();
+</script>
+</body>
+</html>
