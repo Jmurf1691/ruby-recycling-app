@@ -578,6 +578,7 @@ const OPT = {
   coreReturned: ['Yes','No','N/A'],
   fulfillment: ['Pickup','Local Delivery','Shipped'],
   customerType: ['Retail','Wholesale - Shop','Wholesale - Recycler','Online'],
+  saleChannel: ['In Person / Walk-in','Phone','Our Website (Shop Page)','eBay Motors','Car-Part.com','Facebook Marketplace','Other Online'],
 };
 
 /* ---------------- Field configs (keys match DB columns) ---------------- */
@@ -628,6 +629,7 @@ const SALE_FIELDS = [
   {k:'date', l:'Date', t:'date'},
   {k:'part_id', l:'Part', t:'partSelect'},
   {k:'customer_id', l:'Customer', t:'customerSelect'},
+  {k:'sale_channel', l:'Sold Via', t:'select', opts:'saleChannel', req:true},
   {k:'sale_price', l:'Sale Price', t:'number'},
   {k:'payment_method', l:'Payment Method', t:'select', opts:'paymentMethod'},
   {k:'core_returned', l:'Core Returned', t:'select', opts:'coreReturned'},
@@ -725,8 +727,8 @@ document.getElementById('modalSave').addEventListener('click', async ()=>{
   if(!modalCtx || !modalCtx.fields.length) { modalBg.classList.remove('open'); return; }
   const data = {};
   modalForm.querySelectorAll('[data-key]').forEach(inp=>{ data[inp.dataset.key] = inp.value===''? null : inp.value; });
-  const reqField = modalCtx.fields.find(f=>f.req);
-  if(reqField && !data[reqField.k]){ alert(reqField.l + ' is required.'); return; }
+  const missingReq = modalCtx.fields.find(f=>f.req && !data[f.k]);
+  if(missingReq){ alert(missingReq.l + ' is required.'); return; }
   const isPartForm = modalCtx.fields === PART_FIELDS;
   const wasSold = modalCtx.record && modalCtx.record.status === 'Sold';
   const isExistingPart = isPartForm && modalCtx.record && DB.parts.some(p=>p.part_id===modalCtx.record.part_id);
@@ -1415,7 +1417,7 @@ function renderSales(){
   }).sort((a,b)=> (b.date||'').localeCompare(a.date||''));
   const table = document.getElementById('saleTable');
   if(rows.length===0){ table.innerHTML = `<tr><td class="empty">No sales recorded yet.</td></tr>`; return; }
-  let html = '<tr><th>Sale ID</th><th>Date</th><th>Part</th><th>Customer</th><th>Price</th><th>Payment</th><th>Core Returned</th><th>Fulfillment</th><th>Invoice #</th><th></th></tr>';
+  let html = '<tr><th>Sale ID</th><th>Date</th><th>Part</th><th>Customer</th><th>Sold Via</th><th>Price</th><th>Payment</th><th>Core Returned</th><th>Fulfillment</th><th>Invoice #</th><th></th></tr>';
   rows.forEach(s=>{
     const part = DB.parts.find(p=>p.part_id===s.part_id);
     const cust = DB.customers.find(c=>c.customer_id===s.customer_id);
@@ -1423,6 +1425,7 @@ function renderSales(){
       <td>${esc(s.sale_id)}</td><td>${esc(s.date)}</td>
       <td>${esc(part? part.part_id+' — '+part.description : s.part_id)}</td>
       <td>${esc(cust? cust.name : s.customer_id)}</td>
+      <td>${esc(s.sale_channel)}</td>
       <td>${fmtMoney(s.sale_price)}</td><td>${esc(s.payment_method)}</td>
       <td>${esc(s.core_returned)}</td><td>${esc(s.fulfillment)}</td><td>${esc(s.invoice_no)}</td>
       <td><button class="btn small outline" data-edit="${s.sale_id}">Edit</button> <button class="btn small danger" data-del="${s.sale_id}">Del</button></td>
