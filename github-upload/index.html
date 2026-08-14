@@ -704,7 +704,9 @@ function openModal(title, fields, record, onSave){
   modalTitle.textContent = title;
   modalForm.innerHTML = '';
   modalForm.className = 'form-grid';
-  document.getElementById('modalSave').style.display = '';
+  const saveBtn0 = document.getElementById('modalSave');
+  saveBtn0.style.display = '';
+  saveBtn0.textContent = 'Save';
   fields.forEach(f=>{
     const wrap = document.createElement('div');
     wrap.className = 'field' + (f.span2 ? ' span2':'');
@@ -811,11 +813,16 @@ function renderTeardownModal(){
     </div>`;
   }).join('') || '<div class="empty">No parts on this vehicle were assessed as Working during intake.</div>';
   const hiddenNote = hiddenCount>0 ? `<div class="subtitle" style="margin:6px 0 0;">${hiddenCount} part${hiddenCount===1?'':'s'} hidden — marked Not Working / Not Tested at intake.</div>` : '';
-  const html = `<div class="subtitle" style="margin:0 0 10px;">Only parts the intake assessment found working are listed here. Check a box to log it as pulled and create its draft record — a photo is optional, use the camera button whenever you have one.</div>
+  const checkedCount = visibleItems.filter(item=> (teardown[item.name]||{}).checked).length;
+  const html = `<div class="subtitle" style="margin:0 0 10px;">Only parts the intake assessment found working are listed here. Check a box to log it as pulled and create its draft record — a photo is optional, use the camera button whenever you have one. Every check saves immediately to ${esc(v.stock_no)}'s record.</div>
     <div class="teardown-list">${rowsHtml}</div>
     ${hiddenNote}
+    <div class="subtitle" style="margin:10px 0 0;">${checkedCount} of ${visibleItems.length} logged.</div>
     <input type="file" id="teardownPhotoInput" accept="image/*" capture="environment" multiple style="display:none;">`;
   showReadOnlyModal('Teardown Checklist — ' + v.stock_no, html);
+  const saveBtn = document.getElementById('modalSave');
+  saveBtn.style.display = '';
+  saveBtn.textContent = 'Complete / Save';
 
   modalForm.querySelectorAll('[data-teardown-check]').forEach(cb=> cb.onchange = ()=>{
     handleTeardownCheck(teardownStockNo, cb.dataset.teardownCheck, cb.checked);
