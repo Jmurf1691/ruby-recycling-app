@@ -362,12 +362,50 @@ const PHOTO_BUCKET = 'intake-photos';
 
 let _accessToken = null;
 try{ _accessToken = localStorage.getItem('rr_access_token') || null; }catch(e){}
+let _refreshToken = null;
+try{ _refreshToken = localStorage.getItem('rr_refresh_token') || null; }catch(e){}
 let _authChangeCb = null;
+let _refreshTimer = null;
 
 function _authHeaders(json){
   const h = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (_accessToken || SUPABASE_ANON_KEY) };
   if(json) h['Content-Type'] = 'application/json';
   return h;
+}
+
+/* Access tokens expire (Supabase default: 1 hour). This exchanges the long-lived refresh
+   token for a new access token so a shift-long session doesn't hit "JWT expired" errors. */
+async function _refreshSession(){
+  if(!_refreshToken) return false;
+  try{
+    const res = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+      body: JSON.stringify({ refresh_token: _refreshToken }),
+    });
+    if(!res.ok) return false;
+    const json = await res.json();
+    if(!json.access_token) return false;
+    _accessToken = json.access_token;
+    if(json.refresh_token) _refreshToken = json.refresh_token;
+    try{
+      localStorage.setItem('rr_access_token', _accessToken);
+      localStorage.setItem('rr_refresh_token', _refreshToken);
+    }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
+
+/* Runs a fetch, and if it comes back 401 (expired/invalid token), refreshes the session
+   once and retries automatically — buildOpts is a function so headers are rebuilt with
+   the new token on retry rather than reused stale. */
+async function _fetchWithAuth(url, buildOpts){
+  let res = await fetch(url, buildOpts());
+  if(res.status === 401){
+    const refreshed = await _refreshSession();
+    if(refreshed) res = await fetch(url, buildOpts());
+  }
+  return res;
 }
 
 class RRQuery {
@@ -388,11 +426,14 @@ class RRQuery {
     return url;
   }
   then(resolve, reject){
-    const headers = _authHeaders(true);
-    if(this.method === 'POST' || this.method === 'PATCH') headers['Prefer'] = 'return=representation';
-    const opts = { method: this.method, headers };
-    if(this.body !== null && this.method !== 'GET' && this.method !== 'DELETE') opts.body = JSON.stringify(this.body);
-    fetch(this._url(), opts).then(async res=>{
+    const buildOpts = ()=>{
+      const headers = _authHeaders(true);
+      if(this.method === 'POST' || this.method === 'PATCH') headers['Prefer'] = 'return=representation';
+      const opts = { method: this.method, headers };
+      if(this.body !== null && this.method !== 'GET' && this.method !== 'DELETE') opts.body = JSON.stringify(this.body);
+      return opts;
+    };
+    _fetchWithAuth(this._url(), buildOpts).then(async res=>{
       if(!res.ok){
         let msg = res.statusText;
         try{ const j = await res.json(); msg = j.message || j.msg || msg; }catch(e){}
@@ -411,8 +452,16 @@ const sb = {
     async getSession(){
       if(!_accessToken) return { data: { session: null } };
       try{
-        const res = await fetch(SUPABASE_URL + '/auth/v1/user', { headers: _authHeaders(false) });
-        if(!res.ok){ _accessToken = null; try{ localStorage.removeItem('rr_access_token'); }catch(e){} return { data: { session: null } }; }
+        let res = await fetch(SUPABASE_URL + '/auth/v1/user', { headers: _authHeaders(false) });
+        if(res.status === 401){
+          const refreshed = await _refreshSession();
+          if(refreshed) res = await fetch(SUPABASE_URL + '/auth/v1/user', { headers: _authHeaders(false) });
+        }
+        if(!res.ok){
+          _accessToken = null; _refreshToken = null;
+          try{ localStorage.removeItem('rr_access_token'); localStorage.removeItem('rr_refresh_token'); }catch(e){}
+          return { data: { session: null } };
+        }
         const user = await res.json();
         return { data: { session: { user, access_token: _accessToken } } };
       }catch(e){ return { data: { session: null } }; }
@@ -427,14 +476,20 @@ const sb = {
         const json = await res.json();
         if(!res.ok){ return { error: { message: json.error_description || json.msg || 'Login failed' } }; }
         _accessToken = json.access_token;
-        try{ localStorage.setItem('rr_access_token', _accessToken); }catch(e){}
+        _refreshToken = json.refresh_token || null;
+        try{
+          localStorage.setItem('rr_access_token', _accessToken);
+          if(_refreshToken) localStorage.setItem('rr_refresh_token', _refreshToken);
+        }catch(e){}
         if(_authChangeCb) _authChangeCb('SIGNED_IN', { user: json.user, access_token: _accessToken });
         return { error: null };
       }catch(e){ return { error: { message: 'Network error' } }; }
     },
     async signOut(){
       _accessToken = null;
-      try{ localStorage.removeItem('rr_access_token'); }catch(e){}
+      _refreshToken = null;
+      if(_refreshTimer){ clearInterval(_refreshTimer); _refreshTimer = null; }
+      try{ localStorage.removeItem('rr_access_token'); localStorage.removeItem('rr_refresh_token'); }catch(e){}
       return {};
     },
     onAuthStateChange(cb){ _authChangeCb = cb; },
@@ -445,22 +500,24 @@ const sb = {
       return {
         async upload(path, file, opts){
           try{
-            const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + path, {
+            const buildOpts = ()=>({
               method: 'POST',
               headers: Object.assign({ 'Content-Type': (opts && opts.contentType) || 'application/octet-stream' }, _authHeaders(false)),
               body: file,
             });
+            const res = await _fetchWithAuth(SUPABASE_URL + '/storage/v1/object/' + bucket + '/' + path, buildOpts);
             if(!res.ok){ const j = await res.json().catch(()=>({})); return { error: { message: j.message || 'Upload failed' } }; }
             return { error: null };
           }catch(e){ return { error: { message: 'Network error' } }; }
         },
         async remove(paths){
           try{
-            const res = await fetch(SUPABASE_URL + '/storage/v1/object/' + bucket, {
+            const buildOpts = ()=>({
               method: 'DELETE',
               headers: _authHeaders(true),
               body: JSON.stringify({ prefixes: paths }),
             });
+            const res = await _fetchWithAuth(SUPABASE_URL + '/storage/v1/object/' + bucket, buildOpts);
             return { error: res.ok ? null : { message: 'Delete failed' } };
           }catch(e){ return { error: { message: 'Network error' } }; }
         },
@@ -1519,6 +1576,8 @@ async function onLoggedIn(session){
   document.getElementById('appShell').style.display = 'block';
   document.getElementById('userChip').textContent = session.user.email;
   CURRENT_USER_EMAIL = session.user.email;
+  if(_refreshTimer) clearInterval(_refreshTimer);
+  _refreshTimer = setInterval(_refreshSession, 50*60*1000); // proactively renew every 50 min so tokens never sit idle near expiry
   await loadAll();
   renderChecklistGroups();
   resetIntakeForm(true);
