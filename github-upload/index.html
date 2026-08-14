@@ -825,7 +825,7 @@ function renderTeardownModal(){
   saveBtn.textContent = 'Complete / Save';
 
   modalForm.querySelectorAll('[data-teardown-check]').forEach(cb=> cb.onchange = ()=>{
-    handleTeardownCheck(teardownStockNo, cb.dataset.teardownCheck, cb.checked);
+    handleTeardownCheck(teardownStockNo, cb.dataset.teardownCheck, cb.checked, cb);
   });
   modalForm.querySelectorAll('[data-teardown-photo]').forEach(b=> b.onclick = ()=>{
     teardownCaptureItem = b.dataset.teardownPhoto;
@@ -841,68 +841,88 @@ function renderTeardownModal(){
   };
 }
 
+/* Guards against duplicate part creation if a checkbox/button fires twice before the
+   first save finishes (double-tap on a touchscreen, slow connection, etc). Keyed per
+   vehicle+item so unrelated items can still be processed in parallel. */
+const _teardownPending = new Set();
+
 /* Checking a box logs the part as pulled and creates its draft record immediately —
    no photo required. Photos stay a separate, optional action via the camera button. */
-async function handleTeardownCheck(stockNo, itemName, checked){
-  const v = DB.vehicles.find(veh=>veh.stock_no===stockNo);
-  if(!v) return;
-  const teardown = Object.assign({}, v.teardown||{});
-  const state = Object.assign({}, teardown[itemName]||{});
-  state.checked = checked;
-  if(checked && !state.partId){
-    const itemDef = TEARDOWN_CHECKLIST_ITEMS.find(i=>i.name===itemName) || {category:'Other'};
-    const partId = nextId('P-', DB.parts, 'part_id');
-    const desc = [v.year, v.make, v.model, itemName].filter(Boolean).join(' ');
-    const ok = await insertRow('parts', {
-      part_id: partId,
-      stock_no: stockNo,
-      category: itemDef.category,
-      description: desc,
-      qty: 1,
-      status: 'On Hold',
-      notes: 'Auto-created from teardown checklist — needs grading, pricing, and interchange # before listing as Available.',
-    });
-    if(ok){ state.partId = partId; await loadParts(); }
+async function handleTeardownCheck(stockNo, itemName, checked, cbEl){
+  const key = stockNo + '::' + itemName;
+  if(_teardownPending.has(key)) return;
+  _teardownPending.add(key);
+  if(cbEl) cbEl.disabled = true;
+  try{
+    const v = DB.vehicles.find(veh=>veh.stock_no===stockNo);
+    if(!v) return;
+    const teardown = Object.assign({}, v.teardown||{});
+    const state = Object.assign({}, teardown[itemName]||{});
+    state.checked = checked;
+    if(checked && !state.partId){
+      const itemDef = TEARDOWN_CHECKLIST_ITEMS.find(i=>i.name===itemName) || {category:'Other'};
+      const partId = nextId('P-', DB.parts, 'part_id');
+      const desc = [v.year, v.make, v.model, itemName].filter(Boolean).join(' ');
+      const ok = await insertRow('parts', {
+        part_id: partId,
+        stock_no: stockNo,
+        category: itemDef.category,
+        description: desc,
+        qty: 1,
+        status: 'On Hold',
+        notes: 'Auto-created from teardown checklist — needs grading, pricing, and interchange # before listing as Available.',
+      });
+      if(ok){ state.partId = partId; await loadParts(); }
+    }
+    teardown[itemName] = state;
+    await updateRow('vehicles','stock_no', stockNo, {teardown});
+    await loadVehicles();
+    renderParts();
+    renderVehicles();
+    renderTeardownModal();
+  } finally {
+    _teardownPending.delete(key);
   }
-  teardown[itemName] = state;
-  await updateRow('vehicles','stock_no', stockNo, {teardown});
-  await loadVehicles();
-  renderParts();
-  renderVehicles();
-  renderTeardownModal();
 }
 
 async function handleTeardownPhoto(stockNo, itemName, files){
-  const v = DB.vehicles.find(veh=>veh.stock_no===stockNo);
-  if(!v) return;
-  const itemDef = TEARDOWN_CHECKLIST_ITEMS.find(i=>i.name===itemName) || {category:'Other'};
-  const teardown = Object.assign({}, v.teardown||{});
-  let state = Object.assign({checked:true}, teardown[itemName]||{});
-  let partId = state.partId;
-  if(!partId){
-    partId = nextId('P-', DB.parts, 'part_id');
-    const desc = [v.year, v.make, v.model, itemName].filter(Boolean).join(' ');
-    const ok = await insertRow('parts', {
-      part_id: partId,
-      stock_no: stockNo,
-      category: itemDef.category,
-      description: desc,
-      qty: 1,
-      status: 'On Hold',
-      notes: 'Auto-created from teardown checklist — needs grading, pricing, and interchange # before listing as Available.',
-    });
-    if(!ok) return;
-    await loadParts();
+  const key = stockNo + '::' + itemName;
+  if(_teardownPending.has(key)) return;
+  _teardownPending.add(key);
+  try{
+    const v = DB.vehicles.find(veh=>veh.stock_no===stockNo);
+    if(!v) return;
+    const itemDef = TEARDOWN_CHECKLIST_ITEMS.find(i=>i.name===itemName) || {category:'Other'};
+    const teardown = Object.assign({}, v.teardown||{});
+    let state = Object.assign({checked:true}, teardown[itemName]||{});
+    let partId = state.partId;
+    if(!partId){
+      partId = nextId('P-', DB.parts, 'part_id');
+      const desc = [v.year, v.make, v.model, itemName].filter(Boolean).join(' ');
+      const ok = await insertRow('parts', {
+        part_id: partId,
+        stock_no: stockNo,
+        category: itemDef.category,
+        description: desc,
+        qty: 1,
+        status: 'On Hold',
+        notes: 'Auto-created from teardown checklist — needs grading, pricing, and interchange # before listing as Available.',
+      });
+      if(!ok) return;
+      await loadParts();
+    }
+    await uploadPhotos(files, 'part', partId, CURRENT_USER_EMAIL);
+    state.checked = true;
+    state.partId = partId;
+    teardown[itemName] = state;
+    await updateRow('vehicles','stock_no', stockNo, {teardown});
+    await loadVehicles();
+    renderParts();
+    renderVehicles();
+    renderTeardownModal();
+  } finally {
+    _teardownPending.delete(key);
   }
-  await uploadPhotos(files, 'part', partId, CURRENT_USER_EMAIL);
-  state.checked = true;
-  state.partId = partId;
-  teardown[itemName] = state;
-  await updateRow('vehicles','stock_no', stockNo, {teardown});
-  await loadVehicles();
-  renderParts();
-  renderVehicles();
-  renderTeardownModal();
 }
 
 /* ---------------- Vehicles ---------------- */
