@@ -172,12 +172,14 @@
       <h3>1. Vehicle Identification</h3>
       <div class="vin-row">
         <input type="text" id="intakeVin" maxlength="17" placeholder="Scan or type 17-character VIN">
-        <button class="btn gold" id="scanVinBtn" type="button">📷 Scan VIN</button>
+        <button class="btn gold" id="scanVinBtn" type="button">📷 Live Scan</button>
+        <button class="btn outline" id="scanPhotoBtn" type="button">📸 Scan from Photo</button>
+        <input type="file" id="scanPhotoInput" accept="image/*" capture="environment" style="display:none;">
         <button class="btn" id="decodeVinBtn" type="button">Decode VIN</button>
       </div>
       <div id="scanArea"></div>
       <div id="decodeResult"></div>
-      <div class="subtitle" style="margin:6px 0 0;">Vehicle specs are pulled from NHTSA's free public VIN decoder (vPIC) — not a KBB valuation. Camera scanning works on iPhone (Safari), Android, and desktop browsers — just needs HTTPS (this app has it) and an internet connection to load the scanner. Manual VIN entry always works as a fallback.</div>
+      <div class="subtitle" style="margin:6px 0 0;">Vehicle specs are pulled from NHTSA's free public VIN decoder (vPIC) — not a KBB valuation. "Live Scan" reads the camera feed in real time. If that struggles to lock on (common on iPhone with small barcode stickers), use "Scan from Photo" instead — it snaps a full-resolution photo with your native camera and reads the barcode from that, which is usually more reliable. Manual VIN entry always works as a fallback.</div>
     </div>
 
     <div class="section-card">
@@ -936,6 +938,50 @@ async function startScan(){
   }
 }
 document.getElementById('scanVinBtn').addEventListener('click', startScan);
+
+function loadImageFromFile(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{ URL.revokeObjectURL(img.src); resolve(img); };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+document.getElementById('scanPhotoBtn').addEventListener('click', ()=>{
+  stopScan();
+  document.getElementById('scanPhotoInput').click();
+});
+document.getElementById('scanPhotoInput').addEventListener('change', async e=>{
+  const file = e.target.files[0];
+  e.target.value = '';
+  if(!file) return;
+  const resultBox = document.getElementById('decodeResult');
+  if(typeof ZXing === 'undefined'){
+    resultBox.innerHTML = '<div class="decode-result err">The barcode scanner library didn\'t load (check your internet connection, then reload the page). Type the VIN manually above instead.</div>';
+    return;
+  }
+  resultBox.innerHTML = '<div class="decode-result">Reading barcode from photo…</div>';
+  try{
+    const img = await loadImageFromFile(file);
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+      ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODABAR, ZXing.BarcodeFormat.EAN_13
+    ]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    const reader = new ZXing.BrowserMultiFormatReader(hints);
+    const result = await reader.decodeFromImageElement(img);
+    const raw = (result.getText()||'').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
+    if(raw.length===17){
+      document.getElementById('intakeVin').value = raw;
+      decodeVin();
+    } else {
+      resultBox.innerHTML = '<div class="decode-result err">Found a barcode, but it doesn\'t look like a 17-character VIN ("'+esc(raw)+'"). Try again, get closer, or enter the VIN manually above.</div>';
+    }
+  }catch(err){
+    resultBox.innerHTML = '<div class="decode-result err">Couldn\'t find a barcode in that photo — try reducing glare, getting a bit closer, or holding the camera steadier. Manual VIN entry above always works.</div>';
+  }
+});
 
 document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
   const vin = document.getElementById('intakeVin').value.trim().toUpperCase();
