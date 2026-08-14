@@ -177,7 +177,7 @@
       </div>
       <div id="scanArea"></div>
       <div id="decodeResult"></div>
-      <div class="subtitle" style="margin:6px 0 0;">Vehicle specs are pulled from NHTSA's free public VIN decoder (vPIC) — not a KBB valuation. Camera scanning needs Chrome/Edge and HTTPS; manual VIN entry always works as a fallback.</div>
+      <div class="subtitle" style="margin:6px 0 0;">Vehicle specs are pulled from NHTSA's free public VIN decoder (vPIC) — not a KBB valuation. Camera scanning works on iPhone (Safari), Android, and desktop browsers — just needs HTTPS (this app has it) and an internet connection to load the scanner. Manual VIN entry always works as a fallback.</div>
     </div>
 
     <div class="section-card">
@@ -204,19 +204,27 @@
     </div>
 
     <div class="section-card">
-      <h3>5. Exterior &amp; Body Condition</h3>
+      <h3>5. Engine, Transmission &amp; Drivetrain Components</h3>
+      <div class="subtitle" style="margin:0 0 8px;">These are the parts that sell fastest and for the most money — accurate per-part condition here speeds up pricing and listing later.</div>
+      <div class="cond-grid" id="engineGrid"></div>
+      <div class="cond-grid" style="margin-top:12px;" id="drivetrainGrid"></div>
+      <div class="field" style="margin-top:10px;"><label>Engine/Drivetrain Notes</label><textarea id="engineNotes"></textarea></div>
+    </div>
+
+    <div class="section-card">
+      <h3>6. Exterior &amp; Body Condition</h3>
       <div class="cond-grid" id="extGrid"></div>
       <div class="field" style="margin-top:10px;"><label>Exterior Notes</label><textarea id="extNotes"></textarea></div>
     </div>
 
     <div class="section-card">
-      <h3>6. Interior Condition</h3>
+      <h3>7. Interior Condition</h3>
       <div class="cond-grid" id="intGrid"></div>
       <div class="field" style="margin-top:10px;"><label>Interior Notes</label><textarea id="intNotes"></textarea></div>
     </div>
 
     <div class="section-card">
-      <h3>7. Tires &amp; Wheels</h3>
+      <h3>8. Tires &amp; Wheels</h3>
       <div class="cond-grid">
         <div class="cond-item"><label>Tread Adequate</label><select id="tireTread"><option value=""></option><option>Yes</option><option>No</option><option>Mixed</option></select></div>
         <div class="cond-item"><label>Spare Present</label><select id="tireSpare"><option value=""></option><option>Yes</option><option>No</option><option>N/A</option></select></div>
@@ -226,21 +234,21 @@
     </div>
 
     <div class="section-card">
-      <h3>8. Priority Parts to Pull</h3>
+      <h3>9. Priority Parts to Pull</h3>
       <div class="subtitle" style="margin:0 0 8px;">Flag anything especially valuable so it gets pulled first.</div>
       <div class="chk-grid" id="chkPriority"></div>
       <div class="field" style="margin-top:10px;"><label>Other Priority Part</label><input type="text" id="priorityOther" placeholder="e.g. aftermarket stereo"></div>
     </div>
 
     <div class="section-card">
-      <h3>9. Photos</h3>
+      <h3>10. Photos</h3>
       <div class="subtitle" style="margin:0 0 8px;">Tap to open the camera directly on phones/tablets. Add as many as you need.</div>
       <input type="file" id="intakePhotoInput" accept="image/*" capture="environment" multiple>
       <div class="photo-thumbs" id="intakePhotoThumbs"></div>
     </div>
 
     <div class="section-card">
-      <h3>10. Sign-off</h3>
+      <h3>11. Sign-off</h3>
       <div class="form-grid">
         <div class="field"><label>Tech Name *</label><input type="text" id="techName"></div>
         <div class="field"><label>Date/Time Completed</label><input type="datetime-local" id="techDateTime"></div>
@@ -338,6 +346,7 @@
 
 </div><!-- /appShell -->
 
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 /* ---------------- Supabase client (raw fetch shim — no external SDK) ---------------- */
 const SUPABASE_URL = 'https://wnvqvbkgjrqjqyiiuygu.supabase.co';
@@ -755,6 +764,10 @@ const CHECKLIST_PRIORITY_ITEMS = ['Catalytic Converter','Infotainment/Navigation
 const EXTERIOR_AREAS = ['Front','Rear','Left Side','Right Side','Roof','Glass'];
 const INTERIOR_AREAS = ['Seats','Dash/Electronics','Interior Airbags'];
 const CONDITION_OPTIONS = ['Good','Damaged','Missing'];
+/* Most-sold engine/transmission/drivetrain components (per resale market research) */
+const ENGINE_COMPONENTS = ['Cylinder Head','Intake Manifold','Fuel Injectors','Oxygen Sensor(s)','Alternator','Starter'];
+const DRIVETRAIN_COMPONENTS = ['Transmission','Axles','Differential','Driveshaft'];
+const WORKING_OPTIONS = ['Working','Not Working','Not Tested'];
 
 let scanStream = null;
 let scanRAF = null;
@@ -788,6 +801,12 @@ function renderChecklistGroups(){
   document.getElementById('intGrid').innerHTML = INTERIOR_AREAS.map(area=>
     `<div class="cond-item"><label>${esc(area)}</label><select data-int="${esc(area)}"><option value=""></option>${CONDITION_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
   ).join('');
+  document.getElementById('engineGrid').innerHTML = ENGINE_COMPONENTS.map(part=>
+    `<div class="cond-item"><label>${esc(part)}</label><select data-engine="${esc(part)}"><option value=""></option>${WORKING_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
+  ).join('');
+  document.getElementById('drivetrainGrid').innerHTML = DRIVETRAIN_COMPONENTS.map(part=>
+    `<div class="cond-item"><label>${esc(part)}</label><select data-drivetrain="${esc(part)}"><option value=""></option>${WORKING_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
+  ).join('');
 }
 
 function renderIntakePhotoThumbs(){
@@ -813,7 +832,7 @@ function resetIntakeForm(keepTech){
   renderChecklistGroups();
   intakePhotoFiles = [];
   renderIntakePhotoThumbs();
-  ['drStarts','drTrans','drNotes','extNotes','intNotes','tireTread','tireSpare','wheelCond','tireNotes','priorityOther','airbagStatus','catPresent']
+  ['drStarts','drTrans','drNotes','engineNotes','extNotes','intNotes','tireTread','tireSpare','wheelCond','tireNotes','priorityOther','airbagStatus','catPresent']
     .forEach(id=>{ document.getElementById(id).value = ''; });
   if(!keepTech) document.getElementById('techName').value = '';
   const now = new Date();
@@ -859,7 +878,10 @@ async function decodeVin(){
 }
 document.getElementById('decodeVinBtn').addEventListener('click', decodeVin);
 
+let zxingControls = null;
+
 function stopScan(){
+  if(zxingControls){ try{ zxingControls.stop(); }catch(e){} zxingControls = null; }
   if(scanStream){ scanStream.getTracks().forEach(t=>t.stop()); scanStream = null; }
   if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
   const area = document.getElementById('scanArea');
@@ -869,46 +891,49 @@ function stopScan(){
 async function startScan(){
   const scanArea = document.getElementById('scanArea');
   scanArea.innerHTML = '';
-  if(!('BarcodeDetector' in window)){
-    scanArea.innerHTML = '<div class="warn-banner">This browser doesn\'t support camera barcode scanning (works best in Chrome/Edge on Android or desktop). Type the VIN manually above instead.</div>';
-    return;
-  }
   if(!window.isSecureContext){
-    scanArea.innerHTML = '<div class="warn-banner">Camera scanning needs HTTPS. Type the VIN manually above instead.</div>';
+    scanArea.innerHTML = '<div class="warn-banner">Camera scanning needs HTTPS — this page should be served over HTTPS on Netlify. Type the VIN manually above instead.</div>';
     return;
   }
-  let detector;
-  try{ detector = new BarcodeDetector({formats:['code_39','code_128','codabar','ean_13']}); }
-  catch(e){ scanArea.innerHTML = '<div class="warn-banner">Barcode scanning isn\'t available on this device. Type the VIN manually above instead.</div>'; return; }
-  try{
-    scanStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-  }catch(err){
-    scanArea.innerHTML = '<div class="warn-banner">Camera access was blocked or unavailable. Type the VIN manually above instead.</div>';
+  if(typeof ZXing === 'undefined'){
+    scanArea.innerHTML = '<div class="warn-banner">The barcode scanner library didn\'t load (check your internet connection, then reload the page). Type the VIN manually above instead.</div>';
     return;
   }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    scanArea.innerHTML = '<div class="warn-banner">This browser doesn\'t support camera access. Type the VIN manually above instead.</div>';
+    return;
+  }
+
   scanArea.innerHTML = '<div class="scan-box"><video id="scanVideo" autoplay playsinline muted></video><div class="scan-frame"></div></div>'+
     '<button class="btn outline small" id="stopScanBtn" type="button" style="margin-top:6px;">Stop Camera</button>'+
-    '<div class="subtitle" style="margin:6px 0 0;">Point the camera at the VIN barcode (door jamb sticker or dash).</div>';
-  const video = document.getElementById('scanVideo');
-  video.srcObject = scanStream;
+    '<div class="subtitle" style="margin:6px 0 0;">Point the camera at the VIN barcode (door jamb sticker or dash). Works on iPhone Safari, Android, and desktop.</div>';
   document.getElementById('stopScanBtn').onclick = stopScan;
-  const loop = async ()=>{
-    if(!scanStream) return;
-    try{
-      const codes = await detector.detect(video);
-      for(const c of codes){
-        const raw = (c.rawValue||'').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
+  const video = document.getElementById('scanVideo');
+
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODABAR, ZXing.BarcodeFormat.EAN_13
+  ]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  const reader = new ZXing.BrowserMultiFormatReader(hints);
+
+  try{
+    zxingControls = await reader.decodeFromConstraints(
+      { audio: false, video: { facingMode: { ideal: 'environment' } } },
+      video,
+      (result)=>{
+        if(!result) return; // fires repeatedly with no result while scanning — expected, not an error
+        const raw = (result.getText()||'').toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g,'');
         if(raw.length===17){
           document.getElementById('intakeVin').value = raw;
           stopScan();
           decodeVin();
-          return;
         }
       }
-    }catch(e){ /* frame not ready yet, keep trying */ }
-    scanRAF = requestAnimationFrame(loop);
-  };
-  scanRAF = requestAnimationFrame(loop);
+    );
+  }catch(err){
+    scanArea.innerHTML = '<div class="warn-banner">Camera access was blocked or unavailable — check your browser\'s camera permission for this site. Type the VIN manually above instead.</div>';
+  }
 }
 document.getElementById('scanVinBtn').addEventListener('click', startScan);
 
@@ -931,6 +956,10 @@ document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
   EXTERIOR_AREAS.forEach(area=>{ const el=document.querySelector('[data-ext="'+area+'"]'); exterior[area] = el ? el.value : ''; });
   const interior = {};
   INTERIOR_AREAS.forEach(area=>{ const el=document.querySelector('[data-int="'+area+'"]'); interior[area] = el ? el.value : ''; });
+  const engineComponents = {};
+  ENGINE_COMPONENTS.forEach(part=>{ const el=document.querySelector('[data-engine="'+part+'"]'); engineComponents[part] = el ? el.value : ''; });
+  const drivetrainComponents = {};
+  DRIVETRAIN_COMPONENTS.forEach(part=>{ const el=document.querySelector('[data-drivetrain="'+part+'"]'); drivetrainComponents[part] = el ? el.value : ''; });
 
   vehicleData.checklist = {
     completedBy: techName,
@@ -939,6 +968,7 @@ document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
     airbagStatus: document.getElementById('airbagStatus').value,
     catConverterPresent: document.getElementById('catPresent').value,
     drivability: { starts: document.getElementById('drStarts').value, transmissionEngages: document.getElementById('drTrans').value, notes: document.getElementById('drNotes').value },
+    engineComponents, drivetrainComponents, engineNotes: document.getElementById('engineNotes').value,
     exterior, exteriorNotes: document.getElementById('extNotes').value,
     interior, interiorNotes: document.getElementById('intNotes').value,
     tires: { treadOk: document.getElementById('tireTread').value, sparePresent: document.getElementById('tireSpare').value, wheelCondition: document.getElementById('wheelCond').value, notes: document.getElementById('tireNotes').value },
@@ -971,6 +1001,8 @@ function showChecklistModal(v){
   const extRows = Object.entries(c.exterior||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
   const intRows = Object.entries(c.interior||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
   const flagged = Object.entries(c.priority||{}).filter(([,val])=>val).map(([k])=>`<dt>Flagged</dt><dd>${esc(k)}</dd>`).join('');
+  const engineRows = Object.entries(c.engineComponents||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
+  const drivetrainRows = Object.entries(c.drivetrainComponents||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
   const html = `<div class="checklist-view">
     <h4>Sign-off</h4>
     <dl><dt>Completed By</dt><dd>${esc(c.completedBy)}</dd><dt>Date/Time</dt><dd>${esc(c.completedAt)}</dd><dt>Photos Taken</dt><dd>${esc(c.photosTaken)||'—'}</dd></dl>
@@ -978,6 +1010,10 @@ function showChecklistModal(v){
     <dl>${safetyRows}<dt>Airbags</dt><dd>${esc(c.airbagStatus)||'—'}</dd><dt>Catalytic Converter</dt><dd>${esc(c.catConverterPresent)||'—'}</dd></dl>
     <h4>Drivability</h4>
     <dl><dt>Starts &amp; Runs</dt><dd>${esc((c.drivability||{}).starts)||'—'}</dd><dt>Transmission</dt><dd>${esc((c.drivability||{}).transmissionEngages)||'—'}</dd><dt>Notes</dt><dd>${esc((c.drivability||{}).notes)||'—'}</dd></dl>
+    <h4>Engine Components</h4>
+    <dl>${engineRows}</dl>
+    <h4>Drivetrain Components</h4>
+    <dl>${drivetrainRows}<dt>Notes</dt><dd>${esc(c.engineNotes)||'—'}</dd></dl>
     <h4>Exterior</h4>
     <dl>${extRows}<dt>Notes</dt><dd>${esc(c.exteriorNotes)||'—'}</dd></dl>
     <h4>Interior</h4>
