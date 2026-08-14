@@ -727,6 +727,16 @@ document.getElementById('modalSave').addEventListener('click', async ()=>{
   modalForm.querySelectorAll('[data-key]').forEach(inp=>{ data[inp.dataset.key] = inp.value===''? null : inp.value; });
   const reqField = modalCtx.fields.find(f=>f.req);
   if(reqField && !data[reqField.k]){ alert(reqField.l + ' is required.'); return; }
+  const isPartForm = modalCtx.fields === PART_FIELDS;
+  const wasSold = modalCtx.record && modalCtx.record.status === 'Sold';
+  const isExistingPart = isPartForm && modalCtx.record && DB.parts.some(p=>p.part_id===modalCtx.record.part_id);
+  if(isPartForm && data.status === 'Sold' && !wasSold && isExistingPart){
+    // Selling a part always needs a customer, price, and payment method — so instead of just
+    // flipping the label, hand off straight into Record Sale, pre-filled with this part.
+    modalBg.classList.remove('open');
+    openRecordSaleForPart(modalCtx.record);
+    return;
+  }
   const saveBtn = document.getElementById('modalSave');
   saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
   await modalCtx.onSave(data);
@@ -1434,20 +1444,38 @@ function renderSales(){
     if(ok){ await loadSales(); await loadParts(); renderSales(); renderParts(); renderDashboard(); }
   });
 }
+/* Shared by both the "+ Record Sale" button and the "mark a part Sold in Parts Inventory"
+   shortcut — inserts the sale and flips the linked part to Sold, so revenue tracking and
+   part status can never drift apart. */
+async function saveSaleRecord(data){
+  const ok = await insertRow('sales', data);
+  if(ok){
+    const part = DB.parts.find(p=>p.part_id===data.part_id);
+    const patch = { status:'Sold' };
+    if(part && !data.sale_price){ await updateRow('sales','sale_id', data.sale_id, {sale_price: part.list_price}); }
+    if(data.part_id) await updateRow('parts','part_id', data.part_id, patch);
+    await loadSales(); await loadParts(); renderSales(); renderParts(); renderDashboard();
+  }
+}
+
 document.getElementById('addSaleBtn').addEventListener('click', ()=>{
   const availCount = DB.parts.filter(p=>p.status==='Available').length;
   if(availCount===0){ alert('No available parts to sell. Add parts first.'); return; }
-  openModal('Record Sale', SALE_FIELDS, {sale_id: nextId('S-', DB.sales,'sale_id'), date: new Date().toISOString().slice(0,10)}, async data=>{
-    const ok = await insertRow('sales', data);
-    if(ok){
-      const part = DB.parts.find(p=>p.part_id===data.part_id);
-      const patch = { status:'Sold' };
-      if(part && !data.sale_price){ await updateRow('sales','sale_id', data.sale_id, {sale_price: part.list_price}); }
-      if(data.part_id) await updateRow('parts','part_id', data.part_id, patch);
-      await loadSales(); await loadParts(); renderSales(); renderParts(); renderDashboard();
-    }
-  });
+  openModal('Record Sale', SALE_FIELDS, {sale_id: nextId('S-', DB.sales,'sale_id'), date: new Date().toISOString().slice(0,10)}, saveSaleRecord);
 });
+
+/* Triggered when someone changes a part's Status to "Sold" directly in Parts Inventory —
+   rather than silently doing nothing useful, it opens Record Sale pre-filled with that part
+   so the transaction actually gets logged and revenue stays accurate. */
+function openRecordSaleForPart(part){
+  openModal('Record Sale', SALE_FIELDS, {
+    sale_id: nextId('S-', DB.sales,'sale_id'),
+    date: new Date().toISOString().slice(0,10),
+    part_id: part.part_id,
+    sale_price: part.list_price,
+  }, saveSaleRecord);
+}
+
 document.getElementById('saleSearch').addEventListener('input', renderSales);
 
 /* ---------------- Customers ---------------- */
