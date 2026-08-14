@@ -103,6 +103,11 @@
   .photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
   .photo-thumb button{position:absolute;top:2px;right:2px;background:rgba(176,42,42,.85);color:#fff;border:none;border-radius:3px;font-size:10px;padding:2px 5px;cursor:pointer;}
   .user-chip{color:#cbd5e8;font-size:12px;padding:0 6px;}
+  .teardown-list{max-height:55vh;overflow-y:auto;}
+  .teardown-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .teardown-item:last-child{border-bottom:none;}
+  .teardown-thumbs{display:flex;gap:4px;flex-wrap:wrap;}
+  .btn.small.gold{background:var(--gold);color:#fff;}
 </style>
 </head>
 <body>
@@ -699,6 +704,104 @@ function showPhotosModal(entityType, entityId, title){
   });
 }
 
+/* ---------------- Teardown checklist (checking a part opens the camera + auto-creates a linked Part) ---------------- */
+let teardownCaptureItem = null;
+let teardownStockNo = null;
+
+function showTeardownModal(stockNo){
+  teardownStockNo = stockNo;
+  renderTeardownModal();
+}
+
+function renderTeardownModal(){
+  const v = DB.vehicles.find(veh=>veh.stock_no===teardownStockNo);
+  if(!v){ modalBg.classList.remove('open'); return; }
+  const teardown = v.teardown || {};
+  const rowsHtml = TEARDOWN_CHECKLIST_ITEMS.map(item=>{
+    const state = teardown[item.name] || {};
+    const partId = state.partId;
+    const part = partId ? DB.parts.find(p=>p.part_id===partId) : null;
+    const photos = partId ? DB.photos.filter(p=>p.entity_type==='part' && p.entity_id===partId) : [];
+    const thumbs = photos.map(p=>`<div class="photo-thumb" style="width:46px;height:46px;"><img src="${photoUrl(p.storage_path)}" loading="lazy"></div>`).join('');
+    return `<div class="teardown-item">
+      <label class="chk-item" style="flex:1 1 220px;">
+        <input type="checkbox" data-teardown-check="${esc(item.name)}" ${state.checked?'checked':''}>
+        ${esc(item.name)}
+      </label>
+      <button class="btn small outline" type="button" data-teardown-photo="${esc(item.name)}">📷 ${photos.length ? 'Add Photo' : 'Photo'}</button>
+      <span class="teardown-thumbs">${thumbs}</span>
+      ${part ? `<span class="subtitle" style="margin:0;">→ ${esc(part.part_id)} · ${photos.length} photo${photos.length===1?'':'s'}</span>` : ''}
+    </div>`;
+  }).join('');
+  const html = `<div class="subtitle" style="margin:0 0 10px;">Check off each part as it's pulled — checking a box (or tapping the camera icon) opens your camera right away. A draft part record is created automatically, linked to ${esc(v.stock_no)}, and visible to everyone immediately in Parts Inventory (status "On Hold" until someone finishes grading, pricing, and marking it Available).</div>
+    <div class="teardown-list">${rowsHtml}</div>
+    <input type="file" id="teardownPhotoInput" accept="image/*" capture="environment" multiple style="display:none;">`;
+  showReadOnlyModal('Teardown Checklist — ' + v.stock_no, html);
+
+  modalForm.querySelectorAll('[data-teardown-check]').forEach(cb=> cb.onchange = async ()=>{
+    const itemName = cb.dataset.teardownCheck;
+    const vNow = DB.vehicles.find(veh=>veh.stock_no===teardownStockNo);
+    const teardownNow = Object.assign({}, vNow.teardown||{});
+    const state = Object.assign({}, teardownNow[itemName]||{});
+    const hadPart = !!state.partId;
+    state.checked = cb.checked;
+    teardownNow[itemName] = state;
+    await updateRow('vehicles','stock_no', teardownStockNo, {teardown: teardownNow});
+    await loadVehicles();
+    if(cb.checked && !hadPart){
+      teardownCaptureItem = itemName;
+      document.getElementById('teardownPhotoInput').click();
+    } else {
+      renderTeardownModal();
+    }
+  });
+  modalForm.querySelectorAll('[data-teardown-photo]').forEach(b=> b.onclick = ()=>{
+    teardownCaptureItem = b.dataset.teardownPhoto;
+    document.getElementById('teardownPhotoInput').click();
+  });
+  document.getElementById('teardownPhotoInput').onchange = async e=>{
+    const files = Array.from(e.target.files||[]);
+    e.target.value = '';
+    const itemName = teardownCaptureItem;
+    teardownCaptureItem = null;
+    if(!files.length || !itemName) return;
+    await handleTeardownPhoto(teardownStockNo, itemName, files);
+  };
+}
+
+async function handleTeardownPhoto(stockNo, itemName, files){
+  const v = DB.vehicles.find(veh=>veh.stock_no===stockNo);
+  if(!v) return;
+  const itemDef = TEARDOWN_CHECKLIST_ITEMS.find(i=>i.name===itemName) || {category:'Other'};
+  const teardown = Object.assign({}, v.teardown||{});
+  let state = Object.assign({checked:true}, teardown[itemName]||{});
+  let partId = state.partId;
+  if(!partId){
+    partId = nextId('P-', DB.parts, 'part_id');
+    const desc = [v.year, v.make, v.model, itemName].filter(Boolean).join(' ');
+    const ok = await insertRow('parts', {
+      part_id: partId,
+      stock_no: stockNo,
+      category: itemDef.category,
+      description: desc,
+      qty: 1,
+      status: 'On Hold',
+      notes: 'Auto-created from teardown checklist — needs grading, pricing, and interchange # before listing as Available.',
+    });
+    if(!ok) return;
+    await loadParts();
+  }
+  await uploadPhotos(files, 'part', partId, CURRENT_USER_EMAIL);
+  state.checked = true;
+  state.partId = partId;
+  teardown[itemName] = state;
+  await updateRow('vehicles','stock_no', stockNo, {teardown});
+  await loadVehicles();
+  renderParts();
+  renderVehicles();
+  renderTeardownModal();
+}
+
 /* ---------------- Vehicles ---------------- */
 function renderVehicles(){
   const search = document.getElementById('vehicleSearch').value.toLowerCase();
@@ -707,7 +810,7 @@ function renderVehicles(){
   if(selStatus.options.length<=1){ OPT.vehicleStatus.forEach(s=> selStatus.innerHTML += `<option value="${s}">${s}</option>`); }
 
   const cols = ['stock_no','vin','year','make','model','trim','mileage','source','title_status','intake_date','purchase_cost','yard_location','status'];
-  const labels = ['Stock #','VIN','Year','Make','Model','Trim','Mileage','Source','Title','Intake Date','Cost','Location','Status','Checklist','Photos',''];
+  const labels = ['Stock #','VIN','Year','Make','Model','Trim','Mileage','Source','Title','Intake Date','Cost','Location','Status','Checklist','Teardown','Photos',''];
   let rows = DB.vehicles.filter(v=>{
     if(statusF && v.status!==statusF) return false;
     if(search){
@@ -727,6 +830,7 @@ function renderVehicles(){
       return `<td>${esc(v[c])}</td>`;
     }).join('') +
     `<td>${v.checklist ? '<button class="btn small outline" data-viewchk="'+esc(v.stock_no)+'">View</button>' : '—'}</td>` +
+    `<td><button class="btn small gold" data-teardown="${esc(v.stock_no)}">Teardown</button></td>` +
     `<td><button class="btn small outline" data-viewphotos="${esc(v.stock_no)}">Photos (${photoCount})</button></td>` +
     `<td><button class="btn small outline" data-edit="${v.stock_no}">Edit</button> <button class="btn small danger" data-del="${v.stock_no}">Del</button></td></tr>`;
   });
@@ -746,6 +850,10 @@ function renderVehicles(){
   table.querySelectorAll('[data-viewchk]').forEach(b=> b.onclick = ()=>{
     const rec = DB.vehicles.find(v=>v.stock_no===b.dataset.viewchk);
     if(rec) showChecklistModal(rec);
+  });
+  table.querySelectorAll('[data-teardown]').forEach(b=> b.onclick = ()=>{
+    const rec = DB.vehicles.find(v=>v.stock_no===b.dataset.teardown);
+    if(rec) showTeardownModal(rec.stock_no);
   });
   table.querySelectorAll('[data-viewphotos]').forEach(b=> b.onclick = ()=>{
     showPhotosModal('vehicle', b.dataset.viewphotos, b.dataset.viewphotos);
@@ -770,6 +878,30 @@ const CONDITION_OPTIONS = ['Good','Damaged','Missing'];
 const ENGINE_COMPONENTS = ['Cylinder Head','Intake Manifold','Fuel Injectors','Oxygen Sensor(s)','Alternator','Starter'];
 const DRIVETRAIN_COMPONENTS = ['Transmission','Axles','Differential','Driveshaft'];
 const WORKING_OPTIONS = ['Working','Not Working','Not Tested'];
+/* Teardown checklist — the parts most worth pulling, each mapped to a Parts Inventory category */
+const TEARDOWN_CHECKLIST_ITEMS = [
+  {name:'Catalytic Converter', category:'Exhaust'},
+  {name:'Engine (Complete)', category:'Engine'},
+  {name:'Cylinder Head', category:'Engine'},
+  {name:'Intake Manifold', category:'Engine'},
+  {name:'Fuel Injectors', category:'Engine'},
+  {name:'Oxygen Sensor(s)', category:'Engine'},
+  {name:'Alternator', category:'Engine'},
+  {name:'Starter', category:'Engine'},
+  {name:'Transmission', category:'Transmission'},
+  {name:'Axles', category:'Suspension'},
+  {name:'Differential', category:'Suspension'},
+  {name:'Driveshaft', category:'Suspension'},
+  {name:'Infotainment/Navigation System', category:'Electrical'},
+  {name:'Wheels/Rims', category:'Wheel/Tire'},
+  {name:'Airbags', category:'Interior'},
+  {name:'Doors', category:'Body - Door'},
+  {name:'Bumpers', category:'Body - Bumper'},
+  {name:'Headlights/Taillights', category:'Electrical'},
+  {name:'Mirrors', category:'Body - Panel'},
+  {name:'Seats', category:'Interior'},
+];
+let CURRENT_USER_EMAIL = null;
 
 let scanStream = null;
 let scanRAF = null;
@@ -1386,6 +1518,7 @@ async function onLoggedIn(session){
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   document.getElementById('userChip').textContent = session.user.email;
+  CURRENT_USER_EMAIL = session.user.email;
   await loadAll();
   renderChecklistGroups();
   resetIntakeForm(true);
