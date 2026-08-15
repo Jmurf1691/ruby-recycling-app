@@ -219,19 +219,7 @@
     </div>
 
     <div class="section-card">
-      <h3>6. Exterior &amp; Body Condition</h3>
-      <div class="cond-grid" id="extGrid"></div>
-      <div class="field" style="margin-top:10px;"><label>Exterior Notes</label><textarea id="extNotes"></textarea></div>
-    </div>
-
-    <div class="section-card">
-      <h3>7. Interior Condition</h3>
-      <div class="cond-grid" id="intGrid"></div>
-      <div class="field" style="margin-top:10px;"><label>Interior Notes</label><textarea id="intNotes"></textarea></div>
-    </div>
-
-    <div class="section-card">
-      <h3>8. Tires &amp; Wheels</h3>
+      <h3>6. Tires &amp; Wheels</h3>
       <div class="cond-grid">
         <div class="cond-item"><label>Tread Adequate</label><select id="tireTread"><option value=""></option><option>Yes</option><option>No</option><option>Mixed</option></select></div>
         <div class="cond-item"><label>Spare Present</label><select id="tireSpare"><option value=""></option><option>Yes</option><option>No</option><option>N/A</option></select></div>
@@ -241,21 +229,21 @@
     </div>
 
     <div class="section-card">
-      <h3>9. Priority Parts to Pull</h3>
+      <h3>7. Priority Parts to Pull</h3>
       <div class="subtitle" style="margin:0 0 8px;">Flag anything especially valuable so it gets pulled first.</div>
       <div class="chk-grid" id="chkPriority"></div>
       <div class="field" style="margin-top:10px;"><label>Other Priority Part</label><input type="text" id="priorityOther" placeholder="e.g. aftermarket stereo"></div>
     </div>
 
     <div class="section-card">
-      <h3>10. Photos</h3>
+      <h3>8. Photos</h3>
       <div class="subtitle" style="margin:0 0 8px;">Tap to open the camera directly on phones/tablets. Add as many as you need.</div>
       <input type="file" id="intakePhotoInput" accept="image/*" capture="environment" multiple>
       <div class="photo-thumbs" id="intakePhotoThumbs"></div>
     </div>
 
     <div class="section-card">
-      <h3>11. Sign-off</h3>
+      <h3>9. Sign-off</h3>
       <div class="form-grid">
         <div class="field"><label>Tech Name *</label><input type="text" id="techName"></div>
         <div class="field"><label>Date/Time Completed</label><input type="datetime-local" id="techDateTime"></div>
@@ -1009,9 +997,6 @@ document.getElementById('vehicleStatusFilter').addEventListener('change', render
 /* ---------------- New Intake (VIN scan/decode + checklist + photos) ---------------- */
 const CHECKLIST_SAFETY_ITEMS = ['Battery Disconnected','Fuel Drained/Removed','Engine Oil Drained','Coolant Drained','A/C Refrigerant Recovered'];
 const CHECKLIST_PRIORITY_ITEMS = ['Catalytic Converter','Wheels/Rims','Starter','Engine (Whole)','Transmission'];
-const EXTERIOR_AREAS = ['Front','Rear','Left Side','Right Side','Roof','Glass'];
-const INTERIOR_AREAS = ['Seats','Dash/Electronics','Interior Airbags'];
-const CONDITION_OPTIONS = ['Good','Damaged','Missing'];
 /* Focus components — narrowed to the 5 product lines this yard actually sells */
 const ENGINE_COMPONENTS = ['Cylinder Head','Intake Manifold','Fuel Injectors','Oxygen Sensor(s)','Alternator','Starter'];
 const DRIVETRAIN_COMPONENTS = ['Transmission'];
@@ -1058,12 +1043,6 @@ function renderChecklistGroups(){
     `<label class="chk-item"><input type="checkbox" data-safety="${i}"> ${esc(label)}</label>`).join('');
   document.getElementById('chkPriority').innerHTML = CHECKLIST_PRIORITY_ITEMS.map((label,i)=>
     `<label class="chk-item"><input type="checkbox" data-priority="${i}"> ${esc(label)}</label>`).join('');
-  document.getElementById('extGrid').innerHTML = EXTERIOR_AREAS.map(area=>
-    `<div class="cond-item"><label>${esc(area)}</label><select data-ext="${esc(area)}"><option value=""></option>${CONDITION_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
-  ).join('');
-  document.getElementById('intGrid').innerHTML = INTERIOR_AREAS.map(area=>
-    `<div class="cond-item"><label>${esc(area)}</label><select data-int="${esc(area)}"><option value=""></option>${CONDITION_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
-  ).join('');
   document.getElementById('engineGrid').innerHTML = ENGINE_COMPONENTS.map(part=>
     `<div class="cond-item"><label>${esc(part)}</label><select data-engine="${esc(part)}"><option value=""></option>${WORKING_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
   ).join('');
@@ -1095,7 +1074,7 @@ function resetIntakeForm(keepTech){
   renderChecklistGroups();
   intakePhotoFiles = [];
   renderIntakePhotoThumbs();
-  ['drStarts','drTrans','drNotes','engineNotes','extNotes','intNotes','tireTread','tireSpare','wheelCond','tireNotes','priorityOther','airbagStatus','catPresent']
+  ['drStarts','drTrans','drNotes','engineNotes','tireTread','tireSpare','wheelCond','tireNotes','priorityOther','airbagStatus','catPresent']
     .forEach(id=>{ document.getElementById(id).value = ''; });
   if(!keepTech) document.getElementById('techName').value = '';
   const now = new Date();
@@ -1259,10 +1238,6 @@ document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
   CHECKLIST_SAFETY_ITEMS.forEach((label,i)=>{ const el=document.querySelector('[data-safety="'+i+'"]'); safety[label] = !!(el && el.checked); });
   const priority = {};
   CHECKLIST_PRIORITY_ITEMS.forEach((label,i)=>{ const el=document.querySelector('[data-priority="'+i+'"]'); priority[label] = !!(el && el.checked); });
-  const exterior = {};
-  EXTERIOR_AREAS.forEach(area=>{ const el=document.querySelector('[data-ext="'+area+'"]'); exterior[area] = el ? el.value : ''; });
-  const interior = {};
-  INTERIOR_AREAS.forEach(area=>{ const el=document.querySelector('[data-int="'+area+'"]'); interior[area] = el ? el.value : ''; });
   const engineComponents = {};
   ENGINE_COMPONENTS.forEach(part=>{ const el=document.querySelector('[data-engine="'+part+'"]'); engineComponents[part] = el ? el.value : ''; });
   const drivetrainComponents = {};
@@ -1276,8 +1251,6 @@ document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
     catConverterPresent: document.getElementById('catPresent').value,
     drivability: { starts: document.getElementById('drStarts').value, transmissionEngages: document.getElementById('drTrans').value, notes: document.getElementById('drNotes').value },
     engineComponents, drivetrainComponents, engineNotes: document.getElementById('engineNotes').value,
-    exterior, exteriorNotes: document.getElementById('extNotes').value,
-    interior, interiorNotes: document.getElementById('intNotes').value,
     tires: { treadOk: document.getElementById('tireTread').value, sparePresent: document.getElementById('tireSpare').value, wheelCondition: document.getElementById('wheelCond').value, notes: document.getElementById('tireNotes').value },
     priority, priorityOther: document.getElementById('priorityOther').value,
     photosTaken: intakePhotoFiles.length > 0 ? 'Yes' : 'No',
@@ -1305,8 +1278,6 @@ function showChecklistModal(v){
   if(!c){ alert('No checklist on file for this vehicle.'); return; }
   const yn = b => b ? 'Yes' : 'No';
   const safetyRows = Object.entries(c.safety||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${yn(val)}</dd>`).join('');
-  const extRows = Object.entries(c.exterior||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
-  const intRows = Object.entries(c.interior||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
   const flagged = Object.entries(c.priority||{}).filter(([,val])=>val).map(([k])=>`<dt>Flagged</dt><dd>${esc(k)}</dd>`).join('');
   const engineRows = Object.entries(c.engineComponents||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
   const drivetrainRows = Object.entries(c.drivetrainComponents||{}).map(([k,val])=>`<dt>${esc(k)}</dt><dd>${esc(val)||'—'}</dd>`).join('');
@@ -1321,10 +1292,6 @@ function showChecklistModal(v){
     <dl>${engineRows}</dl>
     <h4>Drivetrain Components</h4>
     <dl>${drivetrainRows}<dt>Notes</dt><dd>${esc(c.engineNotes)||'—'}</dd></dl>
-    <h4>Exterior</h4>
-    <dl>${extRows}<dt>Notes</dt><dd>${esc(c.exteriorNotes)||'—'}</dd></dl>
-    <h4>Interior</h4>
-    <dl>${intRows}<dt>Notes</dt><dd>${esc(c.interiorNotes)||'—'}</dd></dl>
     <h4>Tires &amp; Wheels</h4>
     <dl><dt>Tread OK</dt><dd>${esc((c.tires||{}).treadOk)||'—'}</dd><dt>Spare Present</dt><dd>${esc((c.tires||{}).sparePresent)||'—'}</dd><dt>Wheel Condition</dt><dd>${esc((c.tires||{}).wheelCondition)||'—'}</dd><dt>Notes</dt><dd>${esc((c.tires||{}).notes)||'—'}</dd></dl>
     <h4>Priority Parts to Pull</h4>
