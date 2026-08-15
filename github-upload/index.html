@@ -213,6 +213,7 @@
     <div class="section-card">
       <h3>5. Engine, Transmission &amp; Starter Components</h3>
       <div class="subtitle" style="margin:0 0 8px;">These are the parts this yard actually sells — accurate per-part condition here speeds up pricing and listing later.</div>
+      <div class="field" style="margin-bottom:10px;max-width:340px;"><label>Keeping Engine Whole (No Dismantle)?</label><select id="keepEngineWhole"><option value=""></option><option>Yes</option><option>No — Will Dismantle</option><option>Undecided</option></select></div>
       <div class="cond-grid" id="engineGrid"></div>
       <div class="cond-grid" style="margin-top:12px;" id="drivetrainGrid"></div>
       <div class="field" style="margin-top:10px;"><label>Engine/Drivetrain Notes</label><textarea id="engineNotes"></textarea></div>
@@ -559,7 +560,7 @@ const OPT = {
   vehicleSource: ['Purchased - Private','Purchased - Auction','Insurance Auction','Tow-In','Donation'],
   titleStatus: ['Clean','Salvage','Parts Only','Junk'],
   vehicleStatus: ['On Lot','Assessed','In Teardown','Parted Out','Crushed'],
-  category: ['Catalytic Converter','Transmission','Starter','Engine (Whole)','Engine Parts (Disassembled)','Wheel/Tire'],
+  category: ['Catalytic Converter','Transmission','Starter','Turbocharger','Engine (Whole)','Engine Parts (Disassembled)','Wheel/Tire'],
   grade: ['A','B','C','X'],
   testStatus: ['Tested - Working','Tested - Not Working / As-Is','Not Tested'],
   yesNo: ['Yes','No'],
@@ -783,12 +784,18 @@ function getVisibleTeardownItems(v){
   const chk = v.checklist || {};
   const engineComp = chk.engineComponents || {};
   const drivetrainComp = chk.drivetrainComponents || {};
-  const startsOk = (chk.drivability||{}).starts === 'Yes';
   return TEARDOWN_CHECKLIST_ITEMS.filter(item=>{
-    if(item.name === 'Engine (Whole)') return startsOk;
+    // Whether the whole engine is worth pulling now depends on a direct call at intake, not
+    // just whether it starts — a shop may keep a running engine whole, or dismantle a
+    // non-running one for parts.
+    if(item.name === 'Engine (Whole)') return chk.keepEngineWhole === 'Yes';
     if(item.name === 'Catalytic Converter') return chk.catConverterPresent === 'Yes';
-    if(Object.prototype.hasOwnProperty.call(engineComp, item.name)) return engineComp[item.name] === 'Working';
-    if(Object.prototype.hasOwnProperty.call(drivetrainComp, item.name)) return drivetrainComp[item.name] === 'Working';
+    // Each engine/drivetrain component now has its own test question — the first option in its
+    // list is always the "passing" result, so a part only surfaces in teardown if it passed.
+    const engConf = ENGINE_COMPONENTS.find(c=>c.name===item.name);
+    if(engConf) return engineComp[item.name] === engConf.options[0];
+    const drvConf = DRIVETRAIN_COMPONENTS.find(c=>c.name===item.name);
+    if(drvConf) return drivetrainComp[item.name] === drvConf.options[0];
     return true;
   });
 }
@@ -996,11 +1003,32 @@ document.getElementById('vehicleStatusFilter').addEventListener('change', render
 
 /* ---------------- New Intake (VIN scan/decode + checklist + photos) ---------------- */
 const CHECKLIST_SAFETY_ITEMS = ['Battery Disconnected','Fuel Drained/Removed','Engine Oil Drained','Coolant Drained','A/C Refrigerant Recovered'];
-const CHECKLIST_PRIORITY_ITEMS = ['Catalytic Converter','Wheels/Rims','Starter','Engine (Whole)','Transmission'];
-/* Focus components — narrowed to the 5 product lines this yard actually sells */
-const ENGINE_COMPONENTS = ['Cylinder Head','Intake Manifold','Fuel Injectors','Oxygen Sensor(s)','Alternator','Starter'];
-const DRIVETRAIN_COMPONENTS = ['Transmission'];
-const WORKING_OPTIONS = ['Working','Not Working','Not Tested'];
+const CHECKLIST_PRIORITY_ITEMS = ['Catalytic Converter','Wheels/Rims','Starter','Engine (Whole)','Transmission','Turbocharger'];
+/* Focus components — narrowed to the product lines this yard actually sells. Each item asks the
+   real test question a buyer cares about instead of a generic Working/Not Working. The first
+   option in each list is always the "passing" result — getVisibleTeardownItems() relies on that
+   to decide whether a part is worth sending to teardown. */
+/* wholeOk: can this part actually be tested with the engine staying intact/unremoved?
+   Cylinder head, intake manifold, and fuel injectors all require the part to come off the
+   engine to run the real test (pressure/crack test, leak-down/smoke test, flow bench) — so
+   those prompts only make sense if the engine is being dismantled. Oxygen sensor, alternator,
+   starter, and turbo all have a legitimate in-vehicle/non-invasive check, so they stay
+   available either way (with different wording when the engine is staying whole, since
+   "bench tested" isn't accurate if nothing was removed). */
+const ENGINE_COMPONENTS = [
+  {name:'Cylinder Head', wholeOk:false, question:'Pressure/Crack Tested?', options:['Tested - No Cracks Found','Tested - Cracked/Failed','Not Tested']},
+  {name:'Intake Manifold', wholeOk:false, question:'Inspected for Cracks/Leaks?', options:['Inspected - No Cracks or Leaks','Inspected - Cracked/Leaking','Not Tested']},
+  {name:'Fuel Injectors', wholeOk:false, question:'Bench/Flow Tested?', options:['Tested - Within Spec','Tested - Out of Spec','Not Tested']},
+  {name:'Oxygen Sensor(s)', wholeOk:true, question:'Resistance/Output Tested?', options:['Tested - Within Spec','Tested - Out of Spec','Not Tested']},
+  {name:'Alternator', wholeOk:true, question:'Bench Tested Under Load?', options:['Tested - Good Output','Tested - Weak/Failed','Not Tested'],
+    wholeQuestion:'Charging Voltage Tested In-Vehicle?', wholeOptions:['Tested In-Vehicle - Charges Properly','Tested In-Vehicle - Weak/Failed','Not Tested']},
+  {name:'Starter', wholeOk:true, question:'Bench Tested?', options:['Tested - Cranks Under Load','Tested - Weak/Failed','Not Tested'],
+    wholeQuestion:'Cranking Tested In-Vehicle?', wholeOptions:['Tested In-Vehicle - Cranks Strong','Tested In-Vehicle - Weak/Failed','Not Tested']},
+  {name:'Turbocharger', wholeOk:true, question:'Shaft Play & Wheel Inspected?', options:['Inspected - No Excess Play/Damage','Inspected - Play or Damage Found','Not Tested']},
+];
+const DRIVETRAIN_COMPONENTS = [
+  {name:'Transmission', question:'Shift Tested?', options:['Tested - Shifts Through All Gears','Tested - Slipping/Noise Noted','Not Tested']},
+];
 /* Teardown checklist — narrowed to match the 5 categories this yard sells: Catalytic Converter,
    Transmission, Starter, Engine (Whole), and Engine Parts (Disassembled). */
 const TEARDOWN_CHECKLIST_ITEMS = [
@@ -1013,6 +1041,7 @@ const TEARDOWN_CHECKLIST_ITEMS = [
   {name:'Fuel Injectors', category:'Engine Parts (Disassembled)'},
   {name:'Oxygen Sensor(s)', category:'Engine Parts (Disassembled)'},
   {name:'Alternator', category:'Engine Parts (Disassembled)'},
+  {name:'Turbocharger', category:'Turbocharger'},
   {name:'Wheels/Rims', category:'Wheel/Tire'},
 ];
 let CURRENT_USER_EMAIL = null;
@@ -1043,13 +1072,23 @@ function renderChecklistGroups(){
     `<label class="chk-item"><input type="checkbox" data-safety="${i}"> ${esc(label)}</label>`).join('');
   document.getElementById('chkPriority').innerHTML = CHECKLIST_PRIORITY_ITEMS.map((label,i)=>
     `<label class="chk-item"><input type="checkbox" data-priority="${i}"> ${esc(label)}</label>`).join('');
-  document.getElementById('engineGrid').innerHTML = ENGINE_COMPONENTS.map(part=>
-    `<div class="cond-item"><label>${esc(part)}</label><select data-engine="${esc(part)}"><option value=""></option>${WORKING_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
-  ).join('');
-  document.getElementById('drivetrainGrid').innerHTML = DRIVETRAIN_COMPONENTS.map(part=>
-    `<div class="cond-item"><label>${esc(part)}</label><select data-drivetrain="${esc(part)}"><option value=""></option>${WORKING_OPTIONS.map(o=>`<option>${o}</option>`).join('')}</select></div>`
+  const keepWhole = document.getElementById('keepEngineWhole').value === 'Yes';
+  const engineList = keepWhole ? ENGINE_COMPONENTS.filter(c=>c.wholeOk) : ENGINE_COMPONENTS;
+  document.getElementById('engineGrid').innerHTML = engineList.map(c=>{
+    const q = (keepWhole && c.wholeQuestion) ? c.wholeQuestion : c.question;
+    const opts = (keepWhole && c.wholeOptions) ? c.wholeOptions : c.options;
+    return `<div class="cond-item"><label>${esc(c.name)} — ${esc(q)}</label><select data-engine="${esc(c.name)}"><option value=""></option>${opts.map(o=>`<option>${esc(o)}</option>`).join('')}</select></div>`;
+  }).join('');
+  if(keepWhole){
+    const hiddenNames = ENGINE_COMPONENTS.filter(c=>!c.wholeOk).map(c=>c.name).join(', ');
+    document.getElementById('engineGrid').insertAdjacentHTML('beforeend',
+      `<div class="subtitle" style="flex-basis:100%;margin-top:6px;">${esc(hiddenNames)} require removal to test properly — hidden while the engine is staying whole.</div>`);
+  }
+  document.getElementById('drivetrainGrid').innerHTML = DRIVETRAIN_COMPONENTS.map(c=>
+    `<div class="cond-item"><label>${esc(c.name)} — ${esc(c.question)}</label><select data-drivetrain="${esc(c.name)}"><option value=""></option>${c.options.map(o=>`<option>${esc(o)}</option>`).join('')}</select></div>`
   ).join('');
 }
+document.getElementById('keepEngineWhole').addEventListener('change', renderChecklistGroups);
 
 function renderIntakePhotoThumbs(){
   const wrap = document.getElementById('intakePhotoThumbs');
@@ -1074,7 +1113,7 @@ function resetIntakeForm(keepTech){
   renderChecklistGroups();
   intakePhotoFiles = [];
   renderIntakePhotoThumbs();
-  ['drStarts','drTrans','drNotes','engineNotes','tireTread','tireSpare','wheelCond','tireNotes','priorityOther','airbagStatus','catPresent']
+  ['drStarts','drTrans','drNotes','keepEngineWhole','engineNotes','tireTread','tireSpare','wheelCond','tireNotes','priorityOther','airbagStatus','catPresent']
     .forEach(id=>{ document.getElementById(id).value = ''; });
   if(!keepTech) document.getElementById('techName').value = '';
   const now = new Date();
@@ -1239,9 +1278,9 @@ document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
   const priority = {};
   CHECKLIST_PRIORITY_ITEMS.forEach((label,i)=>{ const el=document.querySelector('[data-priority="'+i+'"]'); priority[label] = !!(el && el.checked); });
   const engineComponents = {};
-  ENGINE_COMPONENTS.forEach(part=>{ const el=document.querySelector('[data-engine="'+part+'"]'); engineComponents[part] = el ? el.value : ''; });
+  ENGINE_COMPONENTS.forEach(c=>{ const el=document.querySelector('[data-engine="'+c.name+'"]'); engineComponents[c.name] = el ? el.value : ''; });
   const drivetrainComponents = {};
-  DRIVETRAIN_COMPONENTS.forEach(part=>{ const el=document.querySelector('[data-drivetrain="'+part+'"]'); drivetrainComponents[part] = el ? el.value : ''; });
+  DRIVETRAIN_COMPONENTS.forEach(c=>{ const el=document.querySelector('[data-drivetrain="'+c.name+'"]'); drivetrainComponents[c.name] = el ? el.value : ''; });
 
   vehicleData.checklist = {
     completedBy: techName,
@@ -1250,6 +1289,7 @@ document.getElementById('submitIntakeBtn').addEventListener('click', async ()=>{
     airbagStatus: document.getElementById('airbagStatus').value,
     catConverterPresent: document.getElementById('catPresent').value,
     drivability: { starts: document.getElementById('drStarts').value, transmissionEngages: document.getElementById('drTrans').value, notes: document.getElementById('drNotes').value },
+    keepEngineWhole: document.getElementById('keepEngineWhole').value,
     engineComponents, drivetrainComponents, engineNotes: document.getElementById('engineNotes').value,
     tires: { treadOk: document.getElementById('tireTread').value, sparePresent: document.getElementById('tireSpare').value, wheelCondition: document.getElementById('wheelCond').value, notes: document.getElementById('tireNotes').value },
     priority, priorityOther: document.getElementById('priorityOther').value,
@@ -1484,6 +1524,7 @@ function renderReference(){
     ['Catalytic Converter','Confirm it\'s present and complete (not cut/gutted), note the converter/vehicle it came from, photograph the shell and both flanges. No compression/bench test applies.'],
     ['Transmission','Confirm fluid level/condition, shift through all gears by hand or on a stand, note automatic vs. manual and drive type (2WD/4WD/AWD), check for external leaks.'],
     ['Starter','Bench test — confirm it cranks under load, check terminals and housing for cracks or corrosion, note OEM part number.'],
+    ['Turbocharger','Spin the shaft by hand and check for play/wobble, inspect the wheel for chips or rub marks, confirm it wasn\'t pulled from an oil-starved/failed engine.'],
     ['Engine (Whole)','Compression test every cylinder (write down PSI per cylinder — all should read within 10-15% of each other), confirm mileage, note whether it starts/runs on a stand, list included accessories (turbo, harness, ECU, etc.).'],
     ['Engine Parts (Disassembled)','Test/inspect the individual component (e.g. injector spray pattern, O2 sensor resistance, alternator output) and note the result — don\'t list "Not Tested" parts as "Working."'],
     ['Wheel/Tire','Measure and note tread depth (32nds), check for dry rot/sidewall damage, confirm bolt pattern and size (e.g. 18x8, 5x114.3), note wheel condition (curb rash, bends, cracks).'],
@@ -1493,6 +1534,7 @@ function renderReference(){
     ['Engine (Whole)','$900 - $2,000','$500 - $900','$150 - $500'],
     ['Transmission','$600 - $1,200','$350 - $600','$100 - $350'],
     ['Starter','$60 - $150','$35 - $60','$15 - $35'],
+    ['Turbocharger','$300 - $500','$150 - $300','$75 - $150'],
     ['Engine Parts (Disassembled, each)','$40 - $150','$20 - $60','$10 - $20'],
     ['Wheel/Tire (each)','$60 - $120','$35 - $60','$15 - $35'],
   ];
