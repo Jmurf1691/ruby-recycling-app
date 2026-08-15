@@ -1,0 +1,14 @@
+[[headers]]
+  for = "/github-upload/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/github-upload/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/github-upload/shop.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
