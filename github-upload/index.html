@@ -211,8 +211,8 @@
     </div>
 
     <div class="section-card">
-      <h3>5. Engine, Transmission &amp; Drivetrain Components</h3>
-      <div class="subtitle" style="margin:0 0 8px;">These are the parts that sell fastest and for the most money — accurate per-part condition here speeds up pricing and listing later.</div>
+      <h3>5. Engine, Transmission &amp; Starter Components</h3>
+      <div class="subtitle" style="margin:0 0 8px;">These are the parts this yard actually sells — accurate per-part condition here speeds up pricing and listing later.</div>
       <div class="cond-grid" id="engineGrid"></div>
       <div class="cond-grid" style="margin-top:12px;" id="drivetrainGrid"></div>
       <div class="field" style="margin-top:10px;"><label>Engine/Drivetrain Notes</label><textarea id="engineNotes"></textarea></div>
@@ -280,7 +280,7 @@
   <!-- PARTS -->
   <section class="panel" id="panel-parts">
     <h2>Parts Inventory</h2>
-    <div class="subtitle">Every part pulled from a vehicle. Grade per ARA standard — see Grading Reference tab.</div>
+    <div class="subtitle">Catalytic converters, transmissions, starters, complete engines, disassembled engine parts, and wheels/tires. Grade per ARA standard and record a test status before listing — see Grading Reference tab.</div>
     <div class="toolbar">
       <input type="text" id="partSearch" placeholder="Search description, interchange #, part ID...">
       <select id="partCategoryFilter"><option value="">All categories</option></select>
@@ -318,17 +318,18 @@
     <div class="refnote">Based on the Automotive Recyclers Association (ARA) Parts Grading Guidelines. Price bands are starting estimates — review monthly against comparable listings and adjust for local demand.</div>
     <div class="dash-grid">
       <div class="card">
-        <h3>Part Grades</h3>
+        <h3>Part Grades (Mechanical)</h3>
         <table>
-          <tr><th>Grade</th><th>Body Parts</th><th>Mechanical Parts</th></tr>
-          <tr><td class="grade-A">A</td><td>1 unit of damage or less</td><td>Under 60,000 mi (or under 15,000 mi/model-year if higher)</td></tr>
-          <tr><td class="grade-B">B</td><td>2 units of damage or less</td><td>Up to 200,000 total miles</td></tr>
-          <tr><td class="grade-C">C</td><td>More than 2 units of damage</td><td>Over 200,000 total miles</td></tr>
-          <tr><td>X</td><td colspan="2">Not enough information to grade</td></tr>
+          <tr><th>Grade</th><th>Criteria</th></tr>
+          <tr><td class="grade-A">A</td><td>Under 60,000 mi (or under 15,000 mi/model-year if higher). Tested and confirmed working.</td></tr>
+          <tr><td class="grade-B">B</td><td>Up to 200,000 total miles. Tested and confirmed working.</td></tr>
+          <tr><td class="grade-C">C</td><td>Over 200,000 total miles, or tested with a noted issue.</td></tr>
+          <tr><td>X</td><td>Not enough information to grade (not tested, no mileage available).</td></tr>
         </table>
+        <div class="refnote" style="margin-top:8px;">Catalytic converter value doesn't follow the mileage-based A/B/C grading above — it tracks the vehicle's converter type and daily precious-metal (platinum/palladium/rhodium) market rates. Grade a cat converter on physical condition and confirmed presence/completeness instead.</div>
       </div>
       <div class="card">
-        <h3>Damage Type Codes</h3>
+        <h3>What to Test &amp; Document Before Listing</h3>
         <table id="damageTable"></table>
       </div>
     </div>
@@ -570,8 +571,9 @@ const OPT = {
   vehicleSource: ['Purchased - Private','Purchased - Auction','Insurance Auction','Tow-In','Donation'],
   titleStatus: ['Clean','Salvage','Parts Only','Junk'],
   vehicleStatus: ['On Lot','Assessed','In Teardown','Parted Out','Crushed'],
-  category: ['Engine','Transmission','Body - Door','Body - Panel','Body - Bumper','Electrical','Interior','Wheel/Tire','Glass','Suspension','Exhaust','Cooling','Other'],
+  category: ['Catalytic Converter','Transmission','Starter','Engine (Whole)','Engine Parts (Disassembled)','Wheel/Tire'],
   grade: ['A','B','C','X'],
+  testStatus: ['Tested - Working','Tested - Not Working / As-Is','Not Tested'],
   yesNo: ['Yes','No'],
   partStatus: ['Available','On Hold','Sold','Scrapped'],
   paymentMethod: ['Cash','Card','Check','Invoice/Terms'],
@@ -611,9 +613,9 @@ const PART_FIELDS = [
   {k:'category', l:'Category', t:'select', opts:'category'},
   {k:'description', l:'Part Description', span2:true},
   {k:'hollander_no', l:'Hollander Interchange #'},
-  {k:'grade', l:'Grade', t:'select', opts:'grade'},
-  {k:'damage_code', l:'Damage Code'},
-  {k:'mileage', l:'Mileage (if mech.)', t:'number'},
+  {k:'grade', l:'Grade (ARA)', t:'select', opts:'grade'},
+  {k:'test_status', l:'Test Status', t:'select', opts:'testStatus'},
+  {k:'mileage', l:'Mileage (donor vehicle)', t:'number'},
   {k:'location', l:'Location/Bin'},
   {k:'qty', l:'Qty', t:'number'},
   {k:'core_charge', l:'Core Charge', t:'select', opts:'yesNo'},
@@ -622,7 +624,7 @@ const PART_FIELDS = [
   {k:'status', l:'Status', t:'select', opts:'partStatus'},
   {k:'date_listed', l:'Date Listed', t:'date'},
   {k:'photo_taken', l:'Photo Taken?', t:'select', opts:'yesNo'},
-  {k:'notes', l:'Notes', t:'textarea', span2:true},
+  {k:'notes', l:'Notes (compression PSI, shift test, bench test amps, etc.)', t:'textarea', span2:true},
 ];
 const SALE_FIELDS = [
   {k:'sale_id', l:'Sale ID', req:true},
@@ -795,7 +797,8 @@ function getVisibleTeardownItems(v){
   const drivetrainComp = chk.drivetrainComponents || {};
   const startsOk = (chk.drivability||{}).starts === 'Yes';
   return TEARDOWN_CHECKLIST_ITEMS.filter(item=>{
-    if(item.name === 'Engine (Complete)') return startsOk;
+    if(item.name === 'Engine (Whole)') return startsOk;
+    if(item.name === 'Catalytic Converter') return chk.catConverterPresent === 'Yes';
     if(Object.prototype.hasOwnProperty.call(engineComp, item.name)) return engineComp[item.name] === 'Working';
     if(Object.prototype.hasOwnProperty.call(drivetrainComp, item.name)) return drivetrainComp[item.name] === 'Working';
     return true;
@@ -1005,36 +1008,27 @@ document.getElementById('vehicleStatusFilter').addEventListener('change', render
 
 /* ---------------- New Intake (VIN scan/decode + checklist + photos) ---------------- */
 const CHECKLIST_SAFETY_ITEMS = ['Battery Disconnected','Fuel Drained/Removed','Engine Oil Drained','Coolant Drained','A/C Refrigerant Recovered'];
-const CHECKLIST_PRIORITY_ITEMS = ['Catalytic Converter','Infotainment/Navigation System','Wheels/Rims','Airbags (if not deployed)','Doors','Engine','Transmission'];
+const CHECKLIST_PRIORITY_ITEMS = ['Catalytic Converter','Wheels/Rims','Starter','Engine (Whole)','Transmission'];
 const EXTERIOR_AREAS = ['Front','Rear','Left Side','Right Side','Roof','Glass'];
 const INTERIOR_AREAS = ['Seats','Dash/Electronics','Interior Airbags'];
 const CONDITION_OPTIONS = ['Good','Damaged','Missing'];
-/* Most-sold engine/transmission/drivetrain components (per resale market research) */
+/* Focus components — narrowed to the 5 product lines this yard actually sells */
 const ENGINE_COMPONENTS = ['Cylinder Head','Intake Manifold','Fuel Injectors','Oxygen Sensor(s)','Alternator','Starter'];
-const DRIVETRAIN_COMPONENTS = ['Transmission','Axles','Differential','Driveshaft'];
+const DRIVETRAIN_COMPONENTS = ['Transmission'];
 const WORKING_OPTIONS = ['Working','Not Working','Not Tested'];
-/* Teardown checklist — the parts most worth pulling, each mapped to a Parts Inventory category */
+/* Teardown checklist — narrowed to match the 5 categories this yard sells: Catalytic Converter,
+   Transmission, Starter, Engine (Whole), and Engine Parts (Disassembled). */
 const TEARDOWN_CHECKLIST_ITEMS = [
-  {name:'Catalytic Converter', category:'Exhaust'},
-  {name:'Engine (Complete)', category:'Engine'},
-  {name:'Cylinder Head', category:'Engine'},
-  {name:'Intake Manifold', category:'Engine'},
-  {name:'Fuel Injectors', category:'Engine'},
-  {name:'Oxygen Sensor(s)', category:'Engine'},
-  {name:'Alternator', category:'Engine'},
-  {name:'Starter', category:'Engine'},
+  {name:'Catalytic Converter', category:'Catalytic Converter'},
+  {name:'Engine (Whole)', category:'Engine (Whole)'},
   {name:'Transmission', category:'Transmission'},
-  {name:'Axles', category:'Suspension'},
-  {name:'Differential', category:'Suspension'},
-  {name:'Driveshaft', category:'Suspension'},
-  {name:'Infotainment/Navigation System', category:'Electrical'},
+  {name:'Starter', category:'Starter'},
+  {name:'Cylinder Head', category:'Engine Parts (Disassembled)'},
+  {name:'Intake Manifold', category:'Engine Parts (Disassembled)'},
+  {name:'Fuel Injectors', category:'Engine Parts (Disassembled)'},
+  {name:'Oxygen Sensor(s)', category:'Engine Parts (Disassembled)'},
+  {name:'Alternator', category:'Engine Parts (Disassembled)'},
   {name:'Wheels/Rims', category:'Wheel/Tire'},
-  {name:'Airbags', category:'Interior'},
-  {name:'Doors', category:'Body - Door'},
-  {name:'Bumpers', category:'Body - Bumper'},
-  {name:'Headlights/Taillights', category:'Electrical'},
-  {name:'Mirrors', category:'Body - Panel'},
-  {name:'Seats', category:'Interior'},
 ];
 let CURRENT_USER_EMAIL = null;
 
@@ -1363,8 +1357,8 @@ function renderParts(){
     }
     return true;
   });
-  const cols = ['part_id','stock_no','category','description','hollander_no','grade','location','qty','list_price','status'];
-  const labels = ['Part ID','Vehicle','Category','Description','Interchange #','Grade','Location','Qty','List Price','Status','Photos',''];
+  const cols = ['part_id','stock_no','category','description','hollander_no','grade','test_status','location','qty','list_price','status'];
+  const labels = ['Part ID','Vehicle','Category','Description','Interchange #','Grade','Test Status','Location','Qty','List Price','Status','Photos',''];
   const table = document.getElementById('partTable');
   if(rows.length===0){ table.innerHTML = `<tr><td class="empty">No parts found.</td></tr>`; return; }
   let html = '<tr>' + labels.map(l=>`<th>${l}</th>`).join('') + '</tr>';
@@ -1519,16 +1513,25 @@ document.getElementById('customerSearch').addEventListener('input', renderCustom
 
 /* ---------------- Reference tables ---------------- */
 function renderReference(){
-  const damage = [['B','Burn'],['C','Crease'],['D','Dent'],['E','Bent'],['F','Finish'],['H','Hail'],['J','Rip/Crack'],['K','Buckle'],['L','Lip'],['P','Parking Lot Ding'],['R','Rust on Surface'],['S','Scratch - Surface Only'],['T','Paint Problem']];
-  document.getElementById('damageTable').innerHTML = '<tr><th>Code</th><th>Meaning</th></tr>' + damage.map(d=>`<tr><td>${d[0]}</td><td>${d[1]}</td></tr>`).join('');
+  const testing = [
+    ['Catalytic Converter','Confirm it\'s present and complete (not cut/gutted), note the converter/vehicle it came from, photograph the shell and both flanges. No compression/bench test applies.'],
+    ['Transmission','Confirm fluid level/condition, shift through all gears by hand or on a stand, note automatic vs. manual and drive type (2WD/4WD/AWD), check for external leaks.'],
+    ['Starter','Bench test — confirm it cranks under load, check terminals and housing for cracks or corrosion, note OEM part number.'],
+    ['Engine (Whole)','Compression test every cylinder (write down PSI per cylinder — all should read within 10-15% of each other), confirm mileage, note whether it starts/runs on a stand, list included accessories (turbo, harness, ECU, etc.).'],
+    ['Engine Parts (Disassembled)','Test/inspect the individual component (e.g. injector spray pattern, O2 sensor resistance, alternator output) and note the result — don\'t list "Not Tested" parts as "Working."'],
+    ['Wheel/Tire','Measure and note tread depth (32nds), check for dry rot/sidewall damage, confirm bolt pattern and size (e.g. 18x8, 5x114.3), note wheel condition (curb rash, bends, cracks).'],
+  ];
+  document.getElementById('damageTable').innerHTML = '<tr><th>Category</th><th>Before Listing</th></tr>' + testing.map(d=>`<tr><td>${esc(d[0])}</td><td>${esc(d[1])}</td></tr>`).join('');
   const price = [
-    ['Engine','$900 - $2,000','$500 - $900','$150 - $500'],
+    ['Engine (Whole)','$900 - $2,000','$500 - $900','$150 - $500'],
     ['Transmission','$600 - $1,200','$350 - $600','$100 - $350'],
-    ['Body Panel','$150 - $500','$75 - $150','$25 - $75'],
-    ['Electrical (alt/starter/ECU)','$60 - $150','$35 - $60','$15 - $35'],
+    ['Starter','$60 - $150','$35 - $60','$15 - $35'],
+    ['Engine Parts (Disassembled, each)','$40 - $150','$20 - $60','$10 - $20'],
     ['Wheel/Tire (each)','$60 - $120','$35 - $60','$15 - $35'],
   ];
-  document.getElementById('priceTable').innerHTML = '<tr><th>Category</th><th>Grade A</th><th>Grade B</th><th>Grade C</th></tr>' + price.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('');
+  document.getElementById('priceTable').innerHTML = '<tr><th>Category</th><th>Grade A</th><th>Grade B</th><th>Grade C</th></tr>'
+    + price.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')
+    + '<tr><td>Catalytic Converter</td><td colspan="3">$90 - $550 typical (up to $1,000+ on hybrids) — tracks daily precious-metal scrap pricing, not the A/B/C bands above. Check current rates before quoting.</td></tr>';
 }
 
 /* ---------------- Dashboard ---------------- */
